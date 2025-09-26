@@ -1,22 +1,48 @@
 # Redone funfolding
 
-Even more fun in unfolding with funfolding.
+The goal of this repository is to provide real example use cases of unfolding where funfolding can still be improved. Matters of improvement concern the robustness and flexibility of the fits, the quality of the binning, and the adequacy of statistical and systemic uncertainties.
 
 ## Slurm setup
 
-Use this setup if you're working on the Lamarr cluster
+Use this setup if you're working on the Lamarr cluster.
 
 ```sh
-# start a Slurm job from gwkilab
-./srun.sh
+# connect to the gateway of the cluster
+ssh gwkilab
 
-# inside the job, install the project with its dependencies
-pip install -e .
+# from gwkilab, start a Slurm job
+./srun.sh
 ```
 
 ## Usage
 
-ToDo.
+### Stopping muon neutrinos (Lucas' example)
+
+The use case of stopping muon neutrinos is given in `examples/lucas/unfolding_muons.ipynb`.
+
+First, copy the data to your Lamarr cluster home. SSH to your slurm job, *with a forwarded SSH agent*, such that you can access the `vollmond` node from within your slurm job (don't attempt going via the tmux session, as it does not forward your agent). Execute the following:
+
+```sh
+scp vollmond:/cephfs/users/lwitthaus/data/high_level/23111.pkl ~/data/re-funfolding/
+```
+
+### MC electron neutrinos (Lene's example)
+
+The use case of MC electron neutrinos is given in `examples/lene/MC_Unfolding_NuE_[5e2,1.3e4,11]_[0,180].ipynb`.
+
+First, copy the data to your Lamarr cluster home. SSH to your slurm job, *with a forwarded SSH agent*, such that you can access the `vollmond` node from within your slurm job (don't attempt going via the tmux session, as it does not forward your agent). Execute the following:
+
+```sh
+scp "vollmond:/cephfs/users/lrootsel/NuGen_datasets_complete_SnowStormParameters_214**_old_numpy.pkl" ~/data/re-funfolding/
+```
+
+Second, instantiate the virtual environment from within your slurm job.
+
+```
+cd examples/lene/
+python -m venv venv
+venv/bin/pip install -r requirements.txt
+```
 
 ## Profiling
 
