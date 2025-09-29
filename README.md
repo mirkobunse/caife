@@ -43,6 +43,13 @@ conda env create -f environment.yml
 conda activate stmuons
 pip install --upgrade pip setuptools wheel
 pip install -e /path/to/dnn_selections git+ssh://git@github.com/lwitthaus/funalysis.git@b49c57440d156d553bcfe984668b59aa6042c91a#egg=funalysis git+ssh://git@github.com/icecube/ic3-labels.git@c4d53f722b1be0add69879740307dadce184c4b0#egg=ic3_labels git+ssh://git@github.com/lwitthaus/stoppingmuons.git@0f58008afbcac11212ead0c5b554fd4040b50055#egg=stoppingmuons
+pip install notebook
+```
+
+Finally, start a Jupyter server:
+
+```sh
+jupyter notebook --ip="*"
 ```
 
 ### MC electron neutrinos (Lene's example)
@@ -64,7 +71,7 @@ venv/bin/pip install --upgrade pip setuptools wheel
 venv/bin/pip install -r requirements.txt
 ```
 
-Start a Jupyter server:
+Finally, start a Jupyter server:
 
 ```sh
 venv/bin/jupyter notebook --ip="*"
