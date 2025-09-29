@@ -28,6 +28,20 @@ First, copy the data to your Lamarr cluster home. SSH to your slurm job, *with a
 scp vollmond:/cephfs/users/lwitthaus/data/high_level/23111.pkl ~/data/re-funfolding/
 ```
 
+Second, install Conda at `/opt/miniconda3` from within your slurm job, indicating this installation directory during the interactive installation script. Also, **do not let the installer modify your shell profile.**
+
+```sh
+wget https://repo.anaconda.com/miniconda/Miniconda3-py310_25.7.0-2-Linux-x86_64.sh
+bash Miniconda3-py310_25.7.0-2-Linux-x86_64.sh # install at /opt/miniconda3
+```
+
+Third, instantiate the Conda environment.
+
+```sh
+source /opt/miniconda3/etc/profile.d/conda.sh
+conda env create -f environment.yml
+```
+
 ### MC electron neutrinos (Lene's example)
 
 The use case of MC electron neutrinos is given in `examples/lene/MC_Unfolding_NuE_[5e2,1.3e4,11]_[0,180].ipynb`.
