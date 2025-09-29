@@ -16,6 +16,8 @@ ssh gwkilab
 
 ## Usage
 
+For both examples, get a copy of the [dnn_selections](https://github.com/icecube/dnn_selections) repository, e.g., as a zip archive.
+
 ### Stopping muon neutrinos (Lucas' example)
 
 The use case of stopping muon neutrinos is given in `examples/lucas/unfolding_muons.ipynb`.
@@ -38,11 +40,20 @@ scp "vollmond:/cephfs/users/lrootsel/NuGen_datasets_complete_SnowStormParameters
 
 Second, instantiate the virtual environment from within your slurm job.
 
-```
+```sh
 cd examples/lene/
-python -m venv venv
+python -m venv --system-site-packages venv
+venv/bin/pip install --upgrade pip setuptools wheel
 venv/bin/pip install -r requirements.txt
 ```
+
+Start a Jupyter server:
+
+```sh
+venv/bin/jupyter notebook --ip="*"
+```
+
+Open the Jupyter notebook from your local machine after forwarding the server's SSH port.
 
 ## Profiling
 
