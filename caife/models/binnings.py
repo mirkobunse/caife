@@ -24,7 +24,7 @@ class UnivariateBinning(Binning):
     max_n_bins_proxy: int = 100
     n_cv: int = 10
     criterion: str = "dussap"
-    preprocessor: LinearRegression = field(default_factory=LinearRegression)
+    preprocessor = field(default_factory=LinearRegression)
 
     def fit(self, obs, targets=None):
         # Need to optimize targets aswell
