@@ -15,7 +15,7 @@ class Binning(ABC):
     def fit(self, obs, targets=None):
         pass
     
-    def digitize(self, vec):
+    def digitize(self, vec, is_target=False):
         pass
 
 @dataclass
@@ -35,15 +35,18 @@ class UnivariateBinning(Binning):
         self.obs_bins = ...
 
     # TODO is this what we want to do here?
-    def digitize(self, vec):
+    def digitize(self, vec, is_target=False):
         """internally work with 2D arrays for now: e.g. (n_samples, 1) instead of (n_samples,)"""
         preprocessed_vec = self._preprocess(vec)
+        bins = self.obs_bins
+        if is_target:
+            bins = self.target_bins
         if preprocessed_vec.ndim == 2:
-            return np.digitize(preprocessed_vec, self.obs_bins)
+            return np.digitize(preprocessed_vec, bins)
         if preprocessed_vec.ndim == 3:
             digitized_vec = np.zeros_like(preprocessed_vec)
             for batch in range(preprocessed_vec.shape[0]):
-                digitized_vec[batch, :, :] = np.digitize(preprocessed_vec[batch, :, :], self.obs_bins)
+                digitized_vec[batch, :, :] = np.digitize(preprocessed_vec[batch, :, :], bins)
             return digitized_vec
         
     

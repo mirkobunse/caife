@@ -16,9 +16,10 @@ class LinearModel(Model):
         self.binning = binning
 
     def fit(self, g_train, f_train, sample_weight, systematics, background=None):
+        # TODO is the binning already fit or do we fit it here?
         # digitize inputs somehow
         digitized_obs = self.binning.digitize(g_train)
-        digitized_truth = self.binning.digitize(f_train)
+        digitized_truth = self.binning.digitize(f_train, is_target=True)
         self.systematics = systematics
         self.background = background
         self.A = np.histogram2d(
@@ -29,8 +30,12 @@ class LinearModel(Model):
         )[0]
         M_norm = np.diag(1 / np.sum(self.A, axis=0))
         self.A = self.A @ M_norm
+        # TODO
         ...
 
     def predict(self, g):
         digitized_obs = self.binning.digitize(g)
-        ...
+        f_pred = self.A @ digitized_obs
+        if self.background is not None:
+            f_pred += self.background
+        return f_pred
