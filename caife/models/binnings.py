@@ -1,12 +1,9 @@
 from abc import ABC
 from dataclasses import dataclass, field
 import numpy as np
-<<<<<<< HEAD
 from sklearn.linear_model import LinearRegression
 from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
 from sklearn.ensemble import AdaBoostClassifier, AdaBoostRegressor
-=======
->>>>>>> origin/model-implementation
 
 @dataclass
 class Binning(ABC):
@@ -35,7 +32,7 @@ class UnivariateBinning(Binning):
     def fit(self, X, y):
         # Need to optimize targets aswell
         if self.target_bins is None:
-           assert targets is not None, "Need to specify targets if initialized with no target bins!"
+           assert y is not None, "Need to specify targets if initialized with no target bins!"
            ... 
         # TODO optimize bins for observations
         self.obs_bins = ...
@@ -53,10 +50,10 @@ class UnivariateBinning(Binning):
         if preprocessed_X.ndim == 2:
             return np.digitize(preprocessed_X, bins)
         if preprocessed_X.ndim == 3:
-            digitized_vec = np.zeros_like(preprocessed_X)
+            digitized_X = np.zeros_like(preprocessed_X)
             for batch in range(preprocessed_X.shape[0]):
-                digitized_vec[batch, :, :] = np.digitize(preprocessed_vec[batch, :, :], bins)
-            return digitized_vec
+                digitized_X[batch, :, :] = np.digitize(preprocessed_X[batch, :, :], bins)
+            return digitized_X
 
     def _preprocess(self, X):
         """Helper function to assure that vector has shape (n_samples, 1) or *optionally* (batch_size, n_samples, 1)"""
@@ -100,15 +97,10 @@ class UnivariateBinning(Binning):
 @dataclass
 class TreeBinning(Binning):
     # TODO
-<<<<<<< HEAD
     tree: DecisionTreeRegressor | DecisionTreeClassifier
 
-    def fit(self, obs, targets=None):
-=======
     def fit(self, X, y):
->>>>>>> origin/model-implementation
         ...
 
-    # TODO
     def transform_proxy(self, X):
         ...
