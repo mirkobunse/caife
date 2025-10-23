@@ -1,41 +1,41 @@
 from abc import ABC
 import numpy as np
+from dataclasses import dataclass
+from binnings import Binning
 
 class Model(ABC):
     """Abstract Base Class all Linear Caife Models inherit from"""
     def fit(self, g_train, f_train, sample_weight, systematics, background=None):
         pass
 
-    def predict(self, g):
+    def predict(self, f):
         pass
 
+@dataclass
 class LinearModel(Model):
     """Linear Model for solving g = A @ f"""
-    def __init__(self, binning):
-        super().__init__()
-        self.binning = binning
+    binning: Binning
 
     def fit(self, g_train, f_train, sample_weight, systematics, background=None):
-        # TODO is the binning already fit or do we fit it here?
-        # digitize inputs somehow
-        digitized_obs = self.binning.digitize(g_train)
-        digitized_truth = self.binning.digitize(f_train, is_target=True)
+        if not self.binning.fitted:
+            binning_target = None
+            if self.binning.target_bins is None:
+                binning_target = f_train
+            self.binning.fit(g_train, binning_target)
         self.systematics = systematics
         self.background = background
         self.A = np.histogram2d(
-            x=digitized_obs,
-            y=digitized_truth,
-            bins=(self.binning.obs_bins, self.binning.target_bins), # can we take our optim bins here?
+            x=g_train,
+            y=f_train,
+            bins=(self.binning.obs_bins, self.binning.target_bins),
             weights=sample_weight
         )[0]
         M_norm = np.diag(1 / np.sum(self.A, axis=0))
         self.A = self.A @ M_norm
-        # TODO
-        ...
-
-    def predict(self, g):
-        digitized_obs = self.binning.digitize(g)
-        f_pred = self.A @ digitized_obs
+        
+    def __call__(self, f):
+        dig_tar = self.binning.transform_targets(f)
+        g_pred = self.A @ dig_tar
         if self.background is not None:
-            f_pred += self.background
-        return f_pred
+            g_pred += self.background
+        return g_pred
