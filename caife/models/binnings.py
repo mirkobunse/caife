@@ -1,60 +1,63 @@
 from abc import ABC
 from dataclasses import dataclass, field
 import numpy as np
+<<<<<<< HEAD
 from sklearn.linear_model import LinearRegression
 from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
 from sklearn.ensemble import AdaBoostClassifier, AdaBoostRegressor
+=======
+>>>>>>> origin/model-implementation
 
 @dataclass
 class Binning(ABC):
-    """
-        Base class that all binnings in caife inherit from. 
-    """
-    fitted: bool = False
+    """Base class that all binnings in caife inherit from."""
     target_bins: np.ndarray = None
     max_n_bins_proxy: int = 100
 
-    def fit(self, obs, targets=None):
+    def fit(self, X, y):
+        """TODO: add documentation"""
         pass
-    
-    def transform_target(self, X):
+
+    def transform_target(self, y):
+        """TODO: add documentation"""
         pass
 
     def transform_proxy(self, X):
+        """TODO: add documentation"""
         pass
 
 @dataclass
 class UnivariateBinning(Binning):
     n_cv: int = 10
     criterion: str = "dussap"
-    preprocessor = field(default_factory=LinearRegression)
+    preprocessor: object | None = None
 
-    def fit(self, obs, targets=None):
+    def fit(self, X, y):
         # Need to optimize targets aswell
         if self.target_bins is None:
            assert targets is not None, "Need to specify targets if initialized with no target bins!"
            ... 
         # TODO optimize bins for observations
         self.obs_bins = ...
-        self.fitted = True
+        return self
 
     def transform_target(self, y):
-        return self._transform(y, self.target_bins)
-        
+        return self._transform(y, self.target_bins) # TODO: don't apply preprocessor
+
     def transform_proxy(self, X):
         return self._transform(X, self.obs_bins)
-        
+
     def _transform(self, X, bins):
         """internally work with 2D arrays for now: e.g. (n_samples, 1) instead of (n_samples,)"""
-        preprocessed_vec = self._preprocess(X)
-        if preprocessed_vec.ndim == 2:
-            return np.digitize(preprocessed_vec, bins)
-        if preprocessed_vec.ndim == 3:
-            digitized_vec = np.zeros_like(preprocessed_vec)
-            for batch in range(preprocessed_vec.shape[0]):
+        preprocessed_X = self._preprocess(X)
+        if preprocessed_X.ndim == 2:
+            return np.digitize(preprocessed_X, bins)
+        if preprocessed_X.ndim == 3:
+            digitized_vec = np.zeros_like(preprocessed_X)
+            for batch in range(preprocessed_X.shape[0]):
                 digitized_vec[batch, :, :] = np.digitize(preprocessed_vec[batch, :, :], bins)
             return digitized_vec
-    
+
     def _preprocess(self, X):
         """Helper function to assure that vector has shape (n_samples, 1) or *optionally* (batch_size, n_samples, 1)"""
         preprocessed_X = X
@@ -90,18 +93,22 @@ class UnivariateBinning(Binning):
                 )
         else:    
             raise ValueError(f"Invalid input dim! Maximum valid vector dim is 3, got {X.ndim} instead.")
-        
+
         return preprocessed_X
 
         
 @dataclass
 class TreeBinning(Binning):
     # TODO
+<<<<<<< HEAD
     tree: DecisionTreeRegressor | DecisionTreeClassifier
 
     def fit(self, obs, targets=None):
+=======
+    def fit(self, X, y):
+>>>>>>> origin/model-implementation
         ...
 
     # TODO
-    def transform(self, vec):
+    def transform_proxy(self, X):
         ...
