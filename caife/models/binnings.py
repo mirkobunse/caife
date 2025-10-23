@@ -2,6 +2,8 @@ from abc import ABC
 from dataclasses import dataclass, field
 import numpy as np
 from sklearn.linear_model import LinearRegression
+from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
+from sklearn.ensemble import AdaBoostClassifier, AdaBoostRegressor
 
 @dataclass
 class Binning(ABC):
@@ -95,6 +97,8 @@ class UnivariateBinning(Binning):
 @dataclass
 class TreeBinning(Binning):
     # TODO
+    tree: DecisionTreeRegressor | DecisionTreeClassifier
+
     def fit(self, obs, targets=None):
         ...
 
