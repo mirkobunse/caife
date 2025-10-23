@@ -20,9 +20,17 @@ def poisson_nll(model_output: ndarray, proxy_output: ndarray, sample_weight: nda
     eps = 1e-8
     
     loss = model_output - proxy_output * np.log(model_output + eps)
-
-    if sample_weight is not None:
-        loss *= sample_weight 
     
-    return np.sum(loss)    # <- funfolding does this, does np.mean make sense here?
+    # TODO evaluate whether to use np.average or np.sum
+    """
+    np.average normalizes the weights to sum up to 1.
+    => if the provided sample weights are already normalized
+    this solution should be equivalent to:
+        >>loss *= sample_weight
+        >>return np.sum(loss)
+    otherwise it is equivalent to:
+        >>loss *= sample_weight / sample_weight.sum()
+        >>return np.sum(loss)
+    """
+    return np.average(loss, weights=sample_weight)
 
