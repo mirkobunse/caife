@@ -1,14 +1,18 @@
-from abc import ABC
+from abc import ABC, abstractmethod
 import numpy as np
 from dataclasses import dataclass
 from binnings import Binning
 
-class Model(ABC):
+# TODO move this class to caife.models
+class AbstractModel(ABC):
     """Abstract Base Class all caife Models inherit from."""
+
+    @abstractmethod
     def fit(self, X, y, sample_weight=None, systematics=None, background=None):
         """TODO: add documentation"""
         pass
 
+    @abstractmethod
     def __call__(self, f):
         """Apply this model to a candidate spectrum.
 
@@ -21,7 +25,7 @@ class Model(ABC):
         pass
 
 @dataclass
-class LinearModel(Model):
+class LinearModel(AbstractModel):
     """Linear Model for solving g = A @ f."""
     binning: Binning
     fit_binning: bool = True

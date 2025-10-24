@@ -3,17 +3,20 @@ from dataclasses import dataclass
 import numpy as np
 
 @dataclass
-class Binning(ABC):
+class AbstractBinning(ABC):
     """Base class that all binnings in caife inherit from."""
 
+    @abstractmethod
     def fit(self, X, y):
         """TODO: add documentation"""
         pass
 
+    @abstractmethod
     def transform_target(self, y):
         """TODO: add documentation"""
         pass
 
+    @abstractmethod
     def transform_proxy(self, X):
         """TODO: add documentation"""
         pass
@@ -29,7 +32,7 @@ class Binning(ABC):
         pass
 
 @dataclass
-class UnivariateBinning(Binning):
+class UnivariateBinning(AbstractBinning):
     """TODO: add documentation"""
     target_bins: np.ndarray | None = None
     proxy_bins: np.ndarray | None = None
@@ -116,7 +119,7 @@ class UnivariateBinning(Binning):
 
         
 @dataclass
-class TreeBinning(Binning):
+class TreeBinning(AbstractBinning):
     """TODO: add documentation
 
     TODO:
