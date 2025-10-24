@@ -1,19 +1,10 @@
-from abc import ABC
-from dataclasses import dataclass, field
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
 import numpy as np
-from sklearn.linear_model import LinearRegression
-from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
-from sklearn.ensemble import AdaBoostClassifier, AdaBoostRegressor
-from sklearn.utils.validation import check_is_fitted
-from sklearn.exceptions import NotFittedError
-
-SKLEARN_TREE_LEAF_FEATURE = -2
 
 @dataclass
 class Binning(ABC):
     """Base class that all binnings in caife inherit from."""
-    target_bins: np.ndarray = None
-    max_n_bins_proxy: int = 100
 
     def fit(self, X, y):
         """TODO: add documentation"""
@@ -27,19 +18,36 @@ class Binning(ABC):
         """TODO: add documentation"""
         pass
 
+    @property
+    @abstractmethod
+    def n_bins_target(self):
+        pass
+
+    @property
+    @abstractmethod
+    def n_bins_proxy(self):
+        pass
+
 @dataclass
 class UnivariateBinning(Binning):
+    """TODO: add documentation"""
+    target_bins: np.ndarray | None = None
+    proxy_bins: np.ndarray | None = None
+    min_n_bins_target: int | None = None
+    max_n_bins_target: int | None = None
+    max_n_bins_proxy: int | None = None
     n_cv: int = 10
     criterion: str = "dussap"
     preprocessor: object | None = None
 
     def fit(self, X, y):
-        # Need to optimize targets aswell
-        if self.target_bins is None:
-           assert y is not None, "Need to specify targets if initialized with no target bins!"
-           ... 
-        # TODO optimize bins for observations
-        self.obs_bins = ...
+        if self.target_bins is None: # TODO let's ignore the target_bins for now
+           raise NotImplementedError("target_bins must be specified")
+
+        # TODO optimize proxy_bins
+        if self.proxy_bins is None:
+            self.proxy_bins = None
+
         return self
 
     def transform_target(self, y):
@@ -47,19 +55,25 @@ class UnivariateBinning(Binning):
         return self._transform(y, self.target_bins)
 
     def transform_proxy(self, X):
-        return self._transform(X, self.obs_bins, apply_preprocessor=True)
+        X = self._preprocess(X)
+        return self._transform(X, self.proxy_bins)
 
-    def _transform(self, X, bins, apply_preprocessor=False):
+    @property
+    def n_bins_target(self):
+        return len(self.target_bins) - 1
+
+    @property
+    def n_bins_proxy(self):
+        return len(self.proxy_bins) - 1
+
+    def _transform(self, X, bins):
         """internally work with 2D arrays for now: e.g. (n_samples, 1) instead of (n_samples,)"""
-        preprocessed_X = X
-        if apply_preprocessor:
-            preprocessed_X = self._preprocess(X)
-        if preprocessed_X.ndim == 2:
-            return np.digitize(preprocessed_X, bins)
-        if preprocessed_X.ndim == 3:
-            digitized_X = np.zeros_like(preprocessed_X)
-            for batch in range(preprocessed_X.shape[0]):
-                digitized_X[batch, :, :] = np.digitize(preprocessed_X[batch, :, :], bins)
+        if X.ndim == 2:
+            return np.digitize(X, bins)
+        if X.ndim == 3:
+            digitized_X = np.zeros_like(X)
+            for batch in range(X.shape[0]):
+                digitized_X[batch, :, :] = np.digitize(X[batch, :, :], bins)
             return digitized_X
 
     def _preprocess(self, X):
@@ -103,59 +117,53 @@ class UnivariateBinning(Binning):
         
 @dataclass
 class TreeBinning(Binning):
-    """ 
+    """TODO: add documentation
+
     TODO:
         Should the tree object be passed to the TreeBinning or should TreeBinning create it?
         If so, should this object expose all Tree hyperparams so the user can customize them?
         Should this object optimize Tree hyperparams? Perform cross validation?
         If we create it, do we need a param that specifies Regression or Classification?
         What about boosting? funfolding uses AdaBoost, do we want that aswell?
+
+        - the tree object should be passed, such that the user can configure it without us having to expose any of its hyperparameters
+        - the tree object should be un-typed ("tree: object"), such that our code does not need to import anything from sklearn and such that any class conforming with a certain API (e.g., "tree.apply(X)") can be provided. In general, I aim at only a loose coupling with sklearn, where we assume sklearn's APIs but never import it and, hence, don't need to have it as a regular dependency. Assuming sklearn's API can also mean to disregard checks like "check_is_fitted(tree)" because "tree.apply" is meant to raise an exception if the tree is not fitted.
+        - the binning should be given by the leaf indices, as you already implemented with "tree.apply". However, any two trees would produce different indices that cannot be mapped to each other; hence, there is no way of performing cross validation, boosting, or any other kind of ensembling (unless one uses "tree.predict" instead of "tree.apply", which, however, does not expose the leaf indices).
     """
-    tree: DecisionTreeRegressor | DecisionTreeClassifier
+    tree: object
+    target_bins: np.ndarray
+    fit_tree: bool = True
 
     def fit(self, X, y):
-        """TODO: add documentation"""
-        if not self._tree_fitted() or self.tree.get_n_leaves() > self.max_n_bins_proxy:
-            setattr(self.tree, "max_leaf_nodes", self.max_n_bins_proxy)
-            self.tree.fit(X, y) # refit if more leaves than max_bins
-        self._create_bin_index()
+        if self.fit_tree:
+            self.tree.fit(X, y) # fit the tree
+
+        # create a mapping from arbitrary leaf IDs to nice, consecutive IDs
+        X_tree = self.tree.apply(X) # arbitrary leaf IDs
+        self.bin_index_ = TreeBinning._create_bin_index(X_tree) # the mapping
+
         return self
 
     def transform_proxy(self, X):
-        """TODO: add documentation"""
-        if not self._tree_fitted():
-            raise NotFittedError("self.tree is not fitted!")
-        
-        if not hasattr(self, 'bin_index'):
-            raise NotFittedError("This TreeBinning object has not been fitted!")
-        
-        leaf_indices = self.tree.apply(X)
-        return np.array([self.bin_index[li] for li in leaf_indices])
+        X_tree = self.tree.apply(X)
+        return self.bin_index_[X_tree, 1] # return nice, consecutive IDs
 
     def transform_target(self, y):
-        """TODO: add documentation"""
-        if self.target_bins is None:
-            raise ValueError("Unable to transform targets if no target bins were provided!")
-        if y.ndim == 1:
-            y = np.expand_dims(y, 1)
         return np.digitize(y, self.target_bins)
 
-    def _create_bin_index(self):
-        """create a mapping of tree nodes to bin numbers"""
-        if not self._tree_fitted():
-            raise NotFittedError("Unable to create bin index for unfitted tree!")
-        
-        self.bin_index = {}
-        is_leaf = self.tree.tree_.feature == SKLEARN_TREE_LEAF_FEATURE  # <- I like this for readability instead of magic number -2
-        # get all tree nodes that are leafs and map them to a counter
-        # leaf1 => 0, leaf2 => 1, ...
-        for leaf_index, tree_index in enumerate(np.nonzero(is_leaf)[0]):
-            self.bin_index[tree_index] = leaf_index
+    @property
+    def n_bins_target(self):
+        return len(self.target_bins) - 1
 
-    def _tree_fitted(self):
-        """check whether self.tree is already fitted"""
-        try:
-            check_is_fitted(self.tree, 'tree_')
-            return True
-        except NotFittedError:
-            return False
+    @property
+    def n_bins_proxy(self):
+        return self.bin_index_[:, 1].max() + 1 # the highest bin ID
+
+    @staticmethod
+    def _create_bin_index(X_tree):
+        """Create a mapping of leaf IDs to consecutive bin numbers."""
+        keys = np.unique(X_tree) # arbitrary leaf IDs != { 0, 1, ..., n_bins }
+        bin_index = -1 * np.ones((keys.max()+1, 2), dtype=int) # invalid default value -1
+        bin_index[keys, 0] = keys # populate the 1st column with keys
+        bin_index[keys, 1] = np.arange(len(keys)) # populate the 2nd column with values
+        return bin_index # a vectorizable mapping; apply like "bin_index[X_tree, 1]"

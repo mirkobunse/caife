@@ -24,7 +24,7 @@ class Model(ABC):
 class LinearModel(Model):
     """Linear Model for solving g = A @ f."""
     binning: Binning
-    fit_binning: bool = False
+    fit_binning: bool = True
 
     def fit(self, X, y, sample_weight=None, systematics=None, background=None):
         if self.fit_binning:
