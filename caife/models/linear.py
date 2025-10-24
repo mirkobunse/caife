@@ -37,24 +37,29 @@ class LinearModel(AbstractModel):
                 binning_target = y
             self.binning.fit(X, binning_target)
         self.systematics = systematics
-        self.g_background = None
-        if background is not None:
-            self.g_background = np.histogram( # TODO: use transform_proxy
-                background,
-                bins=self.binning.obs_bins,
-            )
-        self.A = np.histogram2d( # TODO: fix this for multi-dimensional X by using transform_proxy and transform_target
+
+        # estimate the transfer matrix A from (X, y)
+        A = np.histogram2d( # TODO: fix this for multi-dimensional X by using transform_proxy and transform_target
             x=X,
             y=y,
             bins=(self.binning.obs_bins, self.binning.target_bins),
             weights=sample_weight
         )[0]
-        M_norm = np.diag(1 / np.sum(self.A, axis=0))
-        self.A = self.A @ M_norm
+        M_norm = np.diag(1 / np.sum(A, axis=0))
+        A = A @ M_norm
+        self.A = jnp.array(A) # cast A to a JAX array to make __call__ differentiable
+
+        # store the background distribution
+        g_background = np.zeros(len(self.binning.n_bins_proxy))
+        if background is not None:
+            g_background = np.histogram( # TODO: use transform_proxy
+                background,
+                bins=self.binning.obs_bins,
+            )
+        self.g_background = jnp.array(g_background)
+
         return self # sklearn convention; allows method chaining
 
     def __call__(self, f):
-        g_pred = self.A @ f
-        if self.g_background is not None:
-            g_pred += self.g_background
+        g_pred = self.A @ f += self.g_background
         return g_pred
