@@ -22,11 +22,11 @@ class TestTreeBinning(TestCase):
         f_random = np.random.dirichlet(np.ones(len(target_bins)-1))
         n_bins_proxy = model.binning.n_bins_proxy
         self.assertTrue(n_bins_proxy <= max_n_bins_proxy)
-        self.assertTrue(model.A.shape[1] == n_bins_proxy) # TODO or shape[0]?
+        self.assertTrue(model.A_.shape[1] == n_bins_proxy) # TODO or shape[0]?
         self.assertTrue(len(model(f_random)) == n_bins_proxy) # apply model
 
         # check that each column (TODO or row?) sums to one
         np.testing.assert_almost_equal(
-            actual=np.sum(model.A, axis=1), # shape (n_target_bins,)
+            actual=np.sum(model.A_, axis=1), # shape (n_target_bins,)
             desired=1.,
         )
