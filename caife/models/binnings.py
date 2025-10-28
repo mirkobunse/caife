@@ -144,6 +144,7 @@ class TreeBinning(AbstractBinning):
         # create a mapping from arbitrary leaf IDs to nice, consecutive IDs
         X_tree = self.tree.apply(X) # arbitrary leaf IDs
         self.bin_index_ = TreeBinning._create_bin_index(X_tree) # the mapping
+        self.proxy_bins = np.arange(self.n_bins_proxy + 1)
 
         return self
 
@@ -152,7 +153,7 @@ class TreeBinning(AbstractBinning):
         return self.bin_index_[X_tree, 1] # return nice, consecutive IDs
 
     def transform_target(self, y):
-        return np.digitize(y, self.target_bins)
+        return np.digitize(y, self.target_bins, right=True)
 
     @property
     def n_bins_target(self):
