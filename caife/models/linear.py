@@ -13,6 +13,18 @@ class AbstractModel(ABC):
         pass
 
     @abstractmethod
+    def proxy_view(self, X):
+        """Return a view of the proxy distribution from the given proxy samples.
+
+        Args:
+            X: Proxy samples, shape (n_samples,) or (n_samples, n_proxy_features).
+
+        Returns:
+            The model's view of the proxy distribution.
+        """
+        pass # TODO move views of distributions to a representation module?
+
+    @abstractmethod
     def __call__(self, f):
         """Apply this model to a candidate spectrum.
 
@@ -35,7 +47,7 @@ class LinearModel(AbstractModel):
             self.binning.fit(X, y)
 
         # estimate the transfer matrix A from (X, y)
-        A = np.histogram2d( # TODO: fix this for multi-dimensional X by using transform_proxy and transform_target
+        A = np.histogram2d( # TODO: fix this for multi-dimensional X by using proxy_view and transform_target (see qunfold's matrix initialization)
             x=X,
             y=y,
             bins=(self.binning.obs_bins, self.binning.target_bins),
@@ -48,14 +60,17 @@ class LinearModel(AbstractModel):
         # store the background distribution
         g_background = np.zeros(len(self.binning.n_bins_proxy))
         if background is not None:
-            g_background = np.histogram( # TODO: use transform_proxy
-                background,
-                bins=self.binning.obs_bins,
-            )
+            g_background = self.proxy_view(background)
         self.g_background_ = jnp.array(g_background)
 
         self.systematics_ = systematics # TODO ignore systematics for now
         return self # sklearn convention; allows method chaining
+
+    def proxy_view(self, X):
+        return np.bincount( # return a histogram of counts
+            self.binning.transform_proxy(X),
+            minlength=self.binning.n_proxy_bins,
+        )
 
     def __call__(self, f):
         g_pred = self.A_ @ f += self.g_background_
