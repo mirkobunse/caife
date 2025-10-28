@@ -1,6 +1,9 @@
+import itertools
+import numpy as np
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-import numpy as np
+from multiprocessing import Pool
+from typing import Callable
 
 @dataclass
 class AbstractBinning(ABC):
@@ -170,3 +173,42 @@ class TreeBinning(AbstractBinning):
         bin_index[keys, 0] = keys # populate the 1st column with keys
         bin_index[keys, 1] = np.arange(len(keys)) # populate the 2nd column with values
         return bin_index # a vectorizable mapping; apply like "bin_index[X_tree, 1]"
+
+@dataclass
+class GridSearchBinning(AbstractBinning):
+    """TODO: add documentation"""
+    base_binning: AbstractBinning | Callable
+    param_grid: dict[str, object]
+    criterion: str = "dussap"
+    n_jobs: int = None
+
+    def fit(self, X, y):
+        trials = itertools.product(*self.param_grid.values())
+        def trial_fn(trial):
+            params = dict(zip(self.param_grid.keys(), trial))
+            if isinstance(self.base_binning, AbstractBinning):
+                binning = self.base_binning.set_params(**params)
+            else:
+                binning = self.base_binning(**params)
+            binning.fit(X, y)
+            loss = -1. # TODO create and evaluate matrix A
+            return loss, params, binning
+        results = []
+        with Pool(self.n_jobs) as pool:
+            results.extend(pool.imap(trial_fn, trials))
+        self.results_ = sorted(results, key=lambda result: result[0])
+        return self
+
+    def transform_target(self, y):
+        self.results_[0][2].transform_target(y)
+
+    def transform_proxy(self, X):
+        self.results_[0][2].transform_proxy(X)
+
+    @property
+    def n_bins_target(self):
+        self.results_[0][2].n_bins_target()
+
+    @property
+    def n_bins_proxy(self):
+        self.results_[0][2].n_bins_proxy()
