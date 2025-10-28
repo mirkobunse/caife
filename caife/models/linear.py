@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 import numpy as np
 from dataclasses import dataclass
 from binnings import Binning
+import jax.numpy as jnp
 
 # TODO move this class to caife.models
 class AbstractModel(ABC):
@@ -58,5 +59,5 @@ class LinearModel(AbstractModel):
         return self # sklearn convention; allows method chaining
 
     def __call__(self, f):
-        g_pred = self.A_ @ f += self.g_background_
+        g_pred = self.A_ @ f + self.g_background_
         return g_pred
