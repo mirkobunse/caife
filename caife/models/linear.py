@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 import numpy as np
 from dataclasses import dataclass
-from models.binnings import AbstractBinning
+from .binnings import AbstractBinning
 import jax.numpy as jnp
 
 # TODO move this class to caife.models
@@ -72,7 +72,7 @@ class LinearModel(AbstractModel):
     def proxy_view(self, X):
         return np.bincount( # return a histogram of counts
             self.binning.transform_proxy(X),
-            minlength=self.binning.n_proxy_bins,
+            minlength=self.binning.n_bins_proxy,
         )
 
     def __call__(self, f):

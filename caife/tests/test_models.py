@@ -37,5 +37,28 @@ class TestTreeBinning(TestCase):
             desired=np.ones(model.binning.n_bins_target),
         )
 
+    def test_correct_bins(self):
+        n_classes = 6
+        X, y = make_classification(n_samples=1_000, n_features=10, n_informative=7, n_classes=n_classes)
+        target_bins = np.arange(n_classes + 1)
+
+        max_n_bins_proxy = 7
+        tree = DecisionTreeClassifier(max_leaf_nodes=max_n_bins_proxy).fit(X[:900], y[:900])
+        binning = caife.TreeBinning(
+            target_bins=target_bins,
+            tree=tree,
+            fit_tree=False
+        ).fit(X[:900], y[:900])
+
+        binned_proxy = binning.transform_proxy(X[900:])
+        tree_apply = tree.apply(X[900:])
+        
+        used_idx = []
+        for val in range(binning.n_bins_proxy):
+            indices = np.unique(tree_apply[binned_proxy == val])
+            self.assertEqual(indices.shape[0], 1) # all vals are in same leaf if they are in the same bin
+            self.assertFalse(indices[0] in used_idx) # leaf index was not used in other bin
+            used_idx.append(indices[0])
+
 if __name__ == '__main__':
     unittest.main()
