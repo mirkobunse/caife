@@ -18,7 +18,19 @@ class AbstractModel(ABC):
         Returns:
             The model's view of the proxy distribution.
         """
-        pass # TODO move views of distributions to a representation module?
+        pass
+
+    @abstractmethod
+    def target_view(self, y):
+        """Return a view of the target distribution from the given target samples.
+
+        Args:
+            y: Target samples, shape (n_samples,).
+
+        Returns:
+            The model's view of the target distribution.
+        """
+        pass
 
     @abstractmethod
     def __call__(self, f):
