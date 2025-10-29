@@ -1,6 +1,12 @@
-# Redone funfolding
+# caife
 
-The goal of this repository is to provide real example use cases of unfolding where funfolding can still be improved. Matters of improvement concern the robustness and flexibility of the fits, the quality of the binning, and the adequacy of statistical and systemic uncertainties.
+caife is a Python package for unfolding. As such, it provides techniques for **C**omposable and **A**uto-differentiable **I**nversion of **F**redholm **E**quations. The sound of its name (spoken as "cave") is reminiscent of Plato's cave analogy, which has been used to describe the indirect measurement processes that unfolding facilitates.
+
+caife provides robust and flexible fits, high-quality binnings, and adequate estimates of statistical and systemic uncertainties.
+
+## Usage
+
+TODO.
 
 ## Slurm setup
 
@@ -14,7 +20,7 @@ ssh gwkilab
 ./srun.sh
 ```
 
-## Usage
+## Examples and Sketches
 
 See instructions from the following files:
 
