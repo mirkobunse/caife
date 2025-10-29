@@ -5,11 +5,11 @@ from sklearn.datasets import make_classification
 from unittest import TestCase
 import unittest
 
-class TestTreeRepresentation(TestCase):
+class TestTreeBinning(TestCase):
     def test_dev(self):
         X, y = make_classification(n_samples=1_000, n_features=10, n_informative=7, n_classes=4)
         max_n_bins_proxy = 5
-        binning = caife.TreeRepresentation(
+        binning = caife.TreeBinning(
             tree=DecisionTreeClassifier(max_leaf_nodes=max_n_bins_proxy),
         )
 
@@ -26,9 +26,9 @@ class TestTreeRepresentation(TestCase):
 
         background = np.random.randn(*X.shape)
 
-        # configure and fit a model with a TreeRepresentation
+        # configure and fit a model with a TreeBinning
         max_n_bins_proxy = 5
-        binning = caife.TreeRepresentation(
+        binning = caife.TreeBinning(
             tree=DecisionTreeClassifier(max_leaf_nodes=max_n_bins_proxy),
         )
         model = caife.LinearModel(target_bins, binning)
@@ -53,7 +53,7 @@ class TestTreeRepresentation(TestCase):
 
         max_n_bins_proxy = 7
         tree = DecisionTreeClassifier(max_leaf_nodes=max_n_bins_proxy).fit(X[:900], y[:900])
-        binning = caife.TreeRepresentation(
+        binning = caife.TreeBinning(
             tree=tree,
             fit_tree=False
         )
