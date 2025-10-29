@@ -47,14 +47,14 @@ class LinearModel(AbstractModel):
             self.binning.fit(X, y)
 
         # estimate the transfer matrix A from (X, y)
-        A = np.histogram2d( # TODO: fix this for multi-dimensional X by using proxy_view and transform_target (see qunfold's matrix initialization)
-            x=X,
-            y=y,
-            bins=(self.binning.obs_bins, self.binning.target_bins),
-            weights=sample_weight
-        )[0]
-        M_norm = np.diag(1 / np.sum(A, axis=0))
-        A = A @ M_norm
+        X = self.binning.transform_proxy(X)
+        y = self.binning.transform_target(y)
+        A = np.bincount( # most efficient method, see caife.tests.benchmark_transfer
+            self.binning.n_bins_target * X + y, # combined X*y bins
+            weights=sample_weight,
+            minlength=self.binning.n_bins_proxy * self.binning.n_bins_target,
+        ).reshape((self.binning.n_bins_proxy, self.binning.n_bins_target))
+        A = A / A.sum(axis=0, keepdims=True) # normalize
         self.A_ = jnp.array(A) # cast A to a JAX array to make __call__ differentiable
 
         # store the background distribution
@@ -63,7 +63,9 @@ class LinearModel(AbstractModel):
             g_background = self.proxy_view(background)
         self.g_background_ = jnp.array(g_background)
 
-        self.systematics_ = systematics # TODO ignore systematics for now
+        # ignore systematics for now
+        # self.systematics_ = systematics
+
         return self # sklearn convention; allows method chaining
 
     def proxy_view(self, X):
