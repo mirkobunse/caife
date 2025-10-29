@@ -15,13 +15,13 @@ class ScipyResult(Result):
 class ScipySolver(AbstractSolver):
     """TODO: document."""
     solver: str = "trust-ncg"
-    solver_options: Dict[str,object] = field(default_factory=lambda: {
+    solver_options: dict[str,object] = field(default_factory=lambda: {
         "gtol": 1e-8,
         "maxiter": 1000
     })
     seed: int | None = None
 
-    def solve(nll, target_dim, nuisance_dim, n_samples):
+    def solve(self, nll, target_dim, nuisance_dim, n_samples):
         nll = lambda ell: nll( # cast to a function of the latent variable ell
             n_samples * _jnp_softmax(ell)) # TODO consider n_samples as a nuisance parameter
         jac = jax.grad(nll) # Jacobian

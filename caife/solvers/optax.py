@@ -13,7 +13,7 @@ class OptaxResult(Result):
 class OptaxSolver(AbstractSolver):
     """TODO: document."""
 
-    def solve(nll, target_dim, nuisance_dim, n_samples):
+    def solve(self, nll, target_dim, nuisance_dim, n_samples):
         nll = lambda ell: nll( # cast to a function of the latent variable ell
             n_samples * _jnp_softmax(ell)) # TODO consider n_samples as a nuisance parameter
         jac = jax.grad(nll) # Jacobian
