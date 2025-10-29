@@ -6,7 +6,7 @@ from qunfold import AbstractRepresentation
 from typing import Callable
 
 @dataclass
-class TreeBinning(AbstractRepresentation):
+class TreeRepresentation(AbstractRepresentation):
     """TODO: add documentation"""
     tree: object
     fit_tree: bool = True
@@ -15,17 +15,38 @@ class TreeBinning(AbstractRepresentation):
         if self.fit_tree:
             self.tree.fit(X, y) # fit the tree
 
+        if n_classes is None:
+            n_classes = np.unique(y).shape[0] # TODO: change this
+
         # create a mapping from arbitrary leaf IDs to nice, consecutive IDs
         X_tree = self.tree.apply(X) # arbitrary leaf IDs
-        self.bin_index_ = TreeBinning._create_bin_index(X_tree) # the mapping
+        self.bin_index_ = TreeRepresentation._create_bin_index(X_tree) # the mapping
 
-        return None # TODO comply with the API of AbstractRepresentation
+        # transform X
+        X = self.bin_index_[X_tree, 1]
+        
+        # return (f(X), y) if average==False
+        if not average:
+            return X, y
+        
+        A = np.zeros((self.n_bins_, n_classes))
+        for c in range(n_classes):
+            # insert normalized bin counts for all classes
+            A[:, c] = np.bincount(X[y==c], minlength=self.n_bins_) / X[y==c].shape[0]
+
+        return A
 
     def transform(self, X, average=True):
         X_tree = self.tree.apply(X)
         i_tree = self.bin_index_[X_tree, 1] # nice, consecutive IDs
 
-        return None # TODO comply with the API of AbstractRepresentation
+        # return f(X) if average==False
+        if not average:
+            return i_tree
+
+        # TODO: return normalized bincount if average==True?
+        return np.bincount(i_tree) / i_tree.shape[0]
+
 
     @property
     def n_bins_(self):

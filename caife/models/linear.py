@@ -20,8 +20,10 @@ class LinearModel(AbstractModel):
         A = self.representation.fit_transform(X, y, n_classes=self.n_bins_target)
         self.A_ = jnp.array(A) # cast A to a JAX array to make __call__ differentiable
 
+        n_bins_proxy = A.shape[0]
+
         # store the background distribution
-        g_background = np.zeros(self.binning.n_bins_proxy)
+        g_background = np.zeros(n_bins_proxy)
         if background is not None:
             g_background = self.proxy_view(background)
         self.g_background_ = jnp.array(g_background)
