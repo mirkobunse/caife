@@ -86,22 +86,33 @@ class GridSearchRepresentation(AbstractRepresentation):
     def fit_transform(self, X, y, average=True, n_classes=None):
         if not average:
             raise ValueError("GridSearchRepresentation.fit requires average==True")
+        if self.criterion not in ["dussap", "blobel"]:
+            raise ValueError(f"Unknown criterion==\"{self.criterion}\"")
 
         # instantiate all configurations in the param_grid
         configurations = itertools.product(*self.param_grid.values())
 
         # define the evaluation of each configuration
         def trial_fn(configuration):
-            # instantiate the current representation
             params = dict(zip(self.param_grid.keys(), configuration))
+
+            # instantiate and fit the current representation
             if isinstance(self.base_representation, AbstractRepresentation):
                 representation = self.base_representation.set_params(**params)
             else:
                 representation = self.base_representation(**params)
-
-            # fit and evaluate the current representation
             A = representation.fit_transform(X, y)
-            loss = -1. # TODO evaluate matrix A
+
+            # minimize the inverse of the 2nd-smallest eigenvalue [dussap2023label]
+            if self.criterion == "dussap":
+                cme = A - A.mean(axis=0, keepdims=True) # centered mean embedding
+                cgm = cme @ cme.T # centered gram matrix, gcm[i, j] = cme[i] @ cme[j]
+                eigvals, _ = np.linalg.eigh(cgm) # eigenvalues
+                loss = 1 / jnp.sqrt(jnp.abs(eigvals[1]))
+
+            # minimize the condition number [blobel1985unfolding]
+            elif self.criterion == "blobel":
+                loss = np.linalg.cond(A)
 
             return loss, params, representation, A # the results of this trial
 
@@ -112,7 +123,7 @@ class GridSearchRepresentation(AbstractRepresentation):
         self.results_ = sorted(results, key=lambda result: result[0])
 
         # return the outcome of the best configuration
-        return self.results_[0][3]
+        return self.results_[0][3] # = A of the best configuration
 
     def transform(self, X, average=True):
         return self.results_[0][2].transform(X, average=average)
