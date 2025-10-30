@@ -35,16 +35,16 @@ class TreeBinning(AbstractRepresentation):
             i_tree_one_hot = np.eye(self.n_bins_)[i_tree]
             return i_tree_one_hot, y
 
-        # TODO resemble caife.tests.benchmark_transfer.transfer_bincount for efficiency
-        A = np.zeros((self.n_bins_, n_classes))
-        for c in range(n_classes):
-            # insert normalized bin counts for all classes
-            # TODO respect the unit_scale parameter
-            bincount = np.bincount(i_tree[y==c], minlength=self.n_bins_)
-            if self.unit_scale:
-                bincount = bincount.astype(np.float64) / i_tree[y==c].shape[0] 
-            A[:, c] = bincount
+        A = np.bincount(
+            n_classes * i_tree + y, # combined X*y bins
+            minlength=self.n_bins_ * n_classes,
+        ).reshape((self.n_bins_, n_classes))
+
+        if self.unit_scale:
+            A = A.astype(np.float64) / A.sum(axis=0, keepdims=True)
+        
         return A
+        
 
     def transform(self, X, average=True):
         X_tree = self.tree.apply(X)
