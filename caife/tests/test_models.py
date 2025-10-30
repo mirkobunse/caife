@@ -69,5 +69,11 @@ class TestTreeBinning(TestCase):
             self.assertFalse(indices[0] in used_idx) # leaf index was not used in other bin
             used_idx.append(indices[0])
 
+
+class TestGridSearchRepresentation(TestCase):
+    def test():
+        pass
+
+
 if __name__ == '__main__':
     unittest.main()
