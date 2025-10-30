@@ -47,7 +47,7 @@ class TestTreeBinning(TestCase):
             desired=np.ones(model.n_bins_target),
         )
 
-    def test_correct_bins(self):
+    def test_correct_binning(self):
         n_classes = 6
         X, y = make_classification(n_samples=1_000, n_features=10, n_informative=7, n_classes=n_classes)
 
@@ -59,12 +59,24 @@ class TestTreeBinning(TestCase):
         )
         A = binning.fit_transform(X[:900], y[:900], average=False)
 
-        binned_proxy = binning.transform(X[900:], average=False)
+        binned_proxy_one_hot = binning.transform(X[900:], average=False)
         tree_apply = tree.apply(X[900:])
-        
+        binned_proxy_idx = np.argmax(binned_proxy_one_hot, axis=1)
+
+        # test that f(x) only consists of one hot vectors 
+        # all rows sum to 1
+        np.testing.assert_equal(
+            actual=np.sum(binned_proxy_one_hot, axis=1), 
+            desired=np.ones(binned_proxy_one_hot.shape[0]),
+        )
+        # all rows contain a 1
+        self.assertTrue(np.all(np.any(binned_proxy_one_hot == 1, axis=1)))
+
+
+        # test that all values get binned correctly
         used_idx = []
         for val in range(binning.n_bins_):
-            indices = np.unique(tree_apply[binned_proxy == val])
+            indices = np.unique(tree_apply[binned_proxy_idx == val])
             self.assertEqual(indices.shape[0], 1) # all vals are in same leaf if they are in the same bin
             self.assertFalse(indices[0] in used_idx) # leaf index was not used in other bin
             used_idx.append(indices[0])
