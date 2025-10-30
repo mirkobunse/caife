@@ -1,0 +1,50 @@
+[build-system]
+requires = [ "setuptools >= 61.0" ]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "caife"
+description = "Composable and Auto-differentiable Inversion of Fredholm Equations"
+dependencies = [
+    "jax",
+    "numpy",
+    "qunfold>=0.1.5",
+    "scipy",
+]
+requires-python = ">= 3.8"
+keywords = [
+    "machine learning",
+    "supervised learning",
+    "quantification",
+    "class prevalence estimation",
+    "unfolding",
+    "astroparticle physics",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+]
+readme = "README.md"
+authors = [
+    { name = "Mirko Bunse", email = "mirko.bunse@cs.tu-dortmund.de" },
+]
+dynamic = [ "version" ]
+
+[project.optional-dependencies]
+docs = [ "jax[cpu]", "myst-parser", "scikit-learn", "sphinx-rtd-theme" ]
+experiments = [ "jax[cpu]", "scikit-learn" ]
+tests = [ "jax[cpu]", "scikit-learn" ]
+
+[tool.setuptools.dynamic]
+version = { attr = "caife.__version__" }
+
+[project.urls]
+Documentation = "https://mirkobunse.github.io/caife"
+Repository = "https://github.com/mirkobunse/caife"
+Issues = "https://github.com/mirkobunse/caife/issues"

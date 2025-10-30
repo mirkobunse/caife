@@ -4,9 +4,29 @@ caife is a Python package for unfolding. As such, it provides techniques for **C
 
 caife provides robust and flexible fits, high-quality binnings, and adequate estimates of statistical and systemic uncertainties.
 
+## Installation
+
+```sh
+pip install --upgrade pip setuptools wheel
+pip install 'qunfold @ git+https://github.com/mirkobunse/qunfold'
+```
+
+Moreover, you will need a [JAX](https://jax.readthedocs.io/) backend. Typically, the CPU backend will be ideal:
+
+```sh
+pip install "jax[cpu]"
+```
+
 ## Usage
 
 TODO.
+
+## Development
+
+```sh
+pip install -e .[tests]
+python -m unittest
+```
 
 ## Slurm setup
 
