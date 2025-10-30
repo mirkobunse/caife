@@ -33,7 +33,7 @@ class TreeBinning(AbstractRepresentation):
         # return (f(X), y) if average==False
         if not average:
             i_tree_one_hot = np.eye(self.n_bins_)[i_tree]
-            return i_tree_one_hot
+            return i_tree_one_hot, y
 
         # TODO resemble caife.tests.benchmark_transfer.transfer_bincount for efficiency
         A = np.zeros((self.n_bins_, n_classes))
