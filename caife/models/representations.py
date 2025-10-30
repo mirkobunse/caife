@@ -1,9 +1,9 @@
 import itertools
 import numpy as np
 from dataclasses import dataclass
+from functools import partial
 from multiprocessing import Pool
 from qunfold import AbstractRepresentation
-from typing import Callable
 
 @dataclass
 class TreeBinning(AbstractRepresentation):
@@ -78,52 +78,74 @@ class TreeBinning(AbstractRepresentation):
 @dataclass
 class GridSearchRepresentation(AbstractRepresentation):
     """TODO: add documentation"""
-    base_representation: AbstractRepresentation | Callable
+    base_representation: AbstractRepresentation
     param_grid: dict[str, object]
     criterion: str = "dussap"
     n_jobs: int = None
 
     def fit_transform(self, X, y, average=True, n_classes=None):
         if not average:
-            raise ValueError("GridSearchRepresentation.fit requires average==True")
+            raise ValueError("GridSearchRepresentation.fit_transform requires average==True")
         if self.criterion not in ["dussap", "blobel"]:
             raise ValueError(f"Unknown criterion==\"{self.criterion}\"")
 
-        # instantiate all configurations in the param_grid
-        configurations = itertools.product(*self.param_grid.values())
+        # instantiate all grid_cells in the param_grid
+        grid_cells = itertools.product(*self.param_grid.values())
 
-        # define the evaluation of each configuration
-        def trial_fn(configuration):
-            params = dict(zip(self.param_grid.keys(), configuration))
+        # define the evaluation of each grid_cell
+        grid_cell_fn = partial(
+            GridSearchRepresentation._grid_cell_fn,
+            X=X,
+            y=y,
+            param_grid_keys=list(self.param_grid.keys()),
+            base_representation=self.base_representation,
+        )
 
-            # instantiate and fit the current representation
-            if isinstance(self.base_representation, AbstractRepresentation):
-                representation = self.base_representation.set_params(**params)
-            else:
-                representation = self.base_representation(**params)
-            A = representation.fit_transform(X, y)
-
-            # minimize the inverse of the 2nd-smallest eigenvalue [dussap2023label]
-            if self.criterion == "dussap":
-                cme = A - A.mean(axis=0, keepdims=True) # centered mean embedding
-                cgm = cme @ cme.T # centered gram matrix, gcm[i, j] = cme[i] @ cme[j]
-                eigvals, _ = np.linalg.eigh(cgm) # eigenvalues
-                loss = 1 / jnp.sqrt(jnp.abs(eigvals[1]))
-
-            # minimize the condition number [blobel1985unfolding]
-            elif self.criterion == "blobel":
-                loss = np.linalg.cond(A)
-
-            return loss, params, representation, A # the results of this trial
-
-        # evaluate all configurations in parallel
+        # evaluate all grid_cells in parallel
         results = []
         with Pool(self.n_jobs) as pool:
-            results.extend(pool.imap(trial_fn, configurations))
-        self.results_ = sorted(results, key=lambda result: result[0])
+            results.extend(pool.imap(grid_cell_fn, grid_cells))
+        self.results_ = sorted( # sort by loss (ascending)
+            results,
+            key=lambda result: result["losses"][self.criterion]
+        )
 
-        # return the outcome of the best configuration
-        return self.results_[0][3] # = A of the best configuration
+        # return the outcome of the best grid_cell
+        return self.results_[0]["A"]
+
+    @staticmethod
+    def _grid_cell_fn( # how to evaluate each grid_cell
+            grid_cell,
+            X,
+            y,
+            param_grid_keys,
+            base_representation,
+        ):
+        params = dict(zip(param_grid_keys, grid_cell))
+
+        # instantiate and fit the current representation
+        representation = base_representation.set_params(**params)
+        A = representation.fit_transform(X, y)
+
+        # evaluate all criteria (fairly cheap; enables extensive evaluation)
+        losses = {}
+
+        # [dussap2023label]: minimize the inverse of the 2nd-smallest eigenvalue
+        cme = A - A.mean(axis=0, keepdims=True) # centered mean embedding
+        cgm = cme @ cme.T # centered gram matrix, gcm[i, j] = cme[i] @ cme[j]
+        eigvals, _ = np.linalg.eigh(cgm) # eigenvalues
+        losses["dussap"] = 1 / np.sqrt(np.abs(eigvals[1]))
+
+        # [blobel1985unfolding]: minimize the condition number
+        losses["blobel"] = np.linalg.cond(A)
+
+        return { # the results of this trial
+            "losses": losses,
+            "params": params,
+            "representation": representation,
+            "A": A,
+        }
 
     def transform(self, X, average=True):
-        return self.results_[0][2].transform(X, average=average)
+        representation = self.results_[0]["representation"]
+        return representation.transform(X, average=average)

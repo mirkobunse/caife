@@ -83,8 +83,44 @@ class TestTreeBinning(TestCase):
 
 
 class TestGridSearchRepresentation(TestCase):
-    def test():
-        pass
+    def test(self):
+        seed = 1491
+        n_bins_target = 3
+
+        # create synthetic data
+        X, y = make_classification(
+            n_samples=1_000,
+            n_informative=n_bins_target,
+            n_classes=n_bins_target,
+            random_state=seed,
+        )
+
+        # configure the GridSearchRepresentation
+        base_binning = caife.TreeBinning(DecisionTreeClassifier(random_state=seed))
+        param_grid = {
+            "tree__max_leaf_nodes": [ 5, 10, 15 ],
+            "tree__criterion": [ "gini", "entropy" ],
+        }
+        binning = caife.GridSearchRepresentation(base_binning, param_grid)
+
+        # fit: take out the grid search
+        A_best = binning.fit_transform(X, y)
+        X_best = binning.transform(X)
+        params_best = binning.results_[0]["params"]
+
+        # check the outcome
+        losses = np.array([ x["losses"][binning.criterion] for x in binning.results_ ])
+        self.assertTrue(np.all(losses[1:] - losses[:-1] >= 0)) # check if sorted
+        self.assertTrue(np.all(A_best == binning.results_[0]["A"]))
+        self.assertTrue(np.all(X_best == binning.results_[0]["representation"].transform(X)))
+        self.assertTrue(A_best.shape[0] <= np.max(param_grid["tree__max_leaf_nodes"]))
+        self.assertTrue(A_best.shape[1] == n_bins_target)
+
+        # re-run with the best parameters
+        single_cell_grid = { k: [v] for k, v in params_best.items() }
+        binning = caife.GridSearchRepresentation(base_binning, single_cell_grid)
+        A_rep = binning.fit_transform(X, y)
+        self.assertTrue(np.all(A_rep == A_best))
 
 
 if __name__ == '__main__':
