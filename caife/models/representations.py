@@ -28,18 +28,22 @@ class TreeBinning(AbstractRepresentation):
         self.bin_index_ = TreeBinning._create_bin_index(X_tree) # the mapping
 
         # transform X
-        X = self.bin_index_[X_tree, 1]
+        i_tree = self.bin_index_[X_tree, 1]
 
         # return (f(X), y) if average==False
         if not average:
-            return X, y # TODO in this case, X needs to be one-hot encoded
+            i_tree_one_hot = np.eye(self.n_bins_)[i_tree]
+            return i_tree_one_hot
 
         # TODO resemble caife.tests.benchmark_transfer.transfer_bincount for efficiency
         A = np.zeros((self.n_bins_, n_classes))
         for c in range(n_classes):
             # insert normalized bin counts for all classes
             # TODO respect the unit_scale parameter
-            A[:, c] = np.bincount(X[y==c], minlength=self.n_bins_) / X[y==c].shape[0]
+            bincount = np.bincount(i_tree[y==c], minlength=self.n_bins_)
+            if self.unit_scale:
+                bincount = bincount.astype(np.float64) / i_tree[y==c].shape[0] 
+            A[:, c] = bincount
         return A
 
     def transform(self, X, average=True):
@@ -48,10 +52,15 @@ class TreeBinning(AbstractRepresentation):
 
         # return f(X) if average==False
         if not average:
-            return i_tree # TODO in this case, X needs to be one-hot encoded
+            i_tree_one_hot = np.eye(self.n_bins_)[i_tree]
+            return i_tree_one_hot
 
-        # TODO: return normalized bincount if average==True? -> respect the unit_scale parameter
-        return np.bincount(i_tree) / i_tree.shape[0]
+        bin_count = np.bincount(i_tree, minlength=self.n_bins_)
+        # normalize sum of bin counts to 1
+        if self.unit_scale:
+            bin_count = bin_count.astype(np.float64) / bin_count.shape[0]
+
+        return bin_count
 
     @property
     def n_bins_(self):
