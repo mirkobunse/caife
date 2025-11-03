@@ -10,3 +10,11 @@ from .models.linear import (
     AbstractModel,
     LinearModel,
 )
+
+from .solvers import (
+    AbstractSolver,
+)
+
+from .solvers.scipy import (
+    ScipySolver,
+)
