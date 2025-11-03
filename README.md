@@ -21,6 +21,12 @@ pip install "jax[cpu]"
 
 TODO.
 
+## Experiments
+
+```sh
+python -m caife.experiments.gridsearch_representation [--is_test_run] output_path.csv
+```
+
 ## Development
 
 ```sh

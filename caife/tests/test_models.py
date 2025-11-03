@@ -101,7 +101,11 @@ class TestGridSearchRepresentation(TestCase):
             "tree__max_leaf_nodes": [ 5, 10, 15 ],
             "tree__criterion": [ "gini", "entropy" ],
         }
-        binning = caife.GridSearchRepresentation(base_binning, param_grid)
+        binning = caife.GridSearchRepresentation(
+            base_binning,
+            param_grid,
+            is_verbose=True,
+        )
 
         # fit: take out the grid search
         A_best = binning.fit_transform(X, y)
@@ -119,6 +123,13 @@ class TestGridSearchRepresentation(TestCase):
         # re-run with the best parameters
         single_cell_grid = { k: [v] for k, v in params_best.items() }
         binning = caife.GridSearchRepresentation(base_binning, single_cell_grid)
+        A_rep = binning.fit_transform(X, y)
+        self.assertTrue(np.all(A_rep == A_best))
+
+        # re-run with the best parameters and an empty grid
+        empty_grid = {}
+        base_binning.set_params(**params_best)
+        binning = caife.GridSearchRepresentation(base_binning, empty_grid)
         A_rep = binning.fit_transform(X, y)
         self.assertTrue(np.all(A_rep == A_best))
 

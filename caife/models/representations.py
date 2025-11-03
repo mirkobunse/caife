@@ -75,13 +75,49 @@ class TreeBinning(AbstractRepresentation):
         bin_index[keys, 1] = np.arange(len(keys)) # populate the 2nd column with values
         return bin_index # a vectorizable mapping; apply like "bin_index[X_tree, 1]"
 
+
+@dataclass
+class UnivariateBinning(AbstractRepresentation):
+    """TODO: add documentation"""
+    proxy_bins: list[float]
+    unit_scale: bool = True
+
+    def fit_transform(self, X, y, average=True, n_classes=None):
+        if n_classes is None:
+            n_classes = np.max(y) + 1
+
+        # nothing to fit; immediately return the transformed data
+        X = self.transform(X)
+        if not average:
+            return X, y
+        A = np.bincount(
+            n_classes * X + y, # combined X*y bins
+            minlength=self.n_bins_ * n_classes,
+        ).reshape((self.n_bins_, n_classes))
+        return A.astype(np.float64) / A.sum(axis=0, keepdims=True)
+
+    def transform(self, X, average=True):
+        X = np.digitize(X[:, 0], self.proxy_bins)
+        if not average:
+            return np.eye(self.n_bins_)[X] # one-hot encoding
+        g = np.bincount(X, minlength=self.n_bins_)
+        if self.unit_scale:
+            return g / g.sum()
+        return g
+
+    @property
+    def n_bins_(self):
+        return len(self.proxy_bins) - 1
+
+
 @dataclass
 class GridSearchRepresentation(AbstractRepresentation):
     """TODO: add documentation"""
     base_representation: AbstractRepresentation
     param_grid: dict[str, object]
     criterion: str = "dussap"
-    n_jobs: int = None
+    n_jobs: int | None = None
+    is_verbose: bool = False
 
     def fit_transform(self, X, y, average=True, n_classes=None):
         if not average:
@@ -90,7 +126,9 @@ class GridSearchRepresentation(AbstractRepresentation):
             raise ValueError(f"Unknown criterion==\"{self.criterion}\"")
 
         # instantiate all grid_cells in the param_grid
-        grid_cells = itertools.product(*self.param_grid.values())
+        grid_cells = list(itertools.product(*self.param_grid.values()))
+        if len(grid_cells) == 0: # mark at least the base_binning for evaluation
+            grid_cells = [ None ]
 
         # define the evaluation of each grid_cell
         grid_cell_fn = partial(
@@ -103,8 +141,16 @@ class GridSearchRepresentation(AbstractRepresentation):
 
         # evaluate all grid_cells in parallel
         results = []
-        with Pool(self.n_jobs) as pool:
-            results.extend(pool.imap(grid_cell_fn, grid_cells))
+        n_jobs = self.n_jobs
+        if n_jobs is not None and n_jobs < 1:
+            n_jobs = None
+        n_finished_cells = 0
+        with Pool(n_jobs) as pool:
+            for cell_results in pool.imap(grid_cell_fn, grid_cells):
+                results.append(cell_results)
+                n_finished_cells += 1
+                if self.is_verbose:
+                    print(f"{self} evaluated {n_finished_cells}/{len(grid_cells)} cells")
         self.results_ = sorted( # sort by loss (ascending)
             results,
             key=lambda result: result["losses"][self.criterion]

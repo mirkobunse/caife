@@ -38,7 +38,7 @@ dynamic = [ "version" ]
 
 [project.optional-dependencies]
 docs = [ "jax[cpu]", "myst-parser", "scikit-learn", "sphinx-rtd-theme" ]
-experiments = [ "jax[cpu]", "scikit-learn" ]
+experiments = [ "jax[cpu]", "pandas", "scikit-learn" ]
 tests = [ "jax[cpu]", "scikit-learn" ]
 
 [tool.setuptools.dynamic]
