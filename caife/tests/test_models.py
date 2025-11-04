@@ -66,6 +66,16 @@ class TestTreeBinning(TestCase):
         A = binning.fit_transform(X[:900], y[:900], average=True)
         A_scale = binning_scale.fit_transform(X[:900], y[:900], average=True)
 
+        np.testing.assert_almost_equal(
+            actual=np.sum(A, axis=0), # shape (n_classes,)
+            desired=np.ones(n_classes),
+        )
+
+        np.testing.assert_almost_equal(
+            actual=np.sum(A_scale, axis=0), # shape (n_classes,)
+            desired=np.ones(n_classes),
+        )
+
         binned_proxy_one_hot = binning.transform(X[900:], average=False)
         tree_apply = tree.apply(X[900:])
         binned_proxy_idx = np.argmax(binned_proxy_one_hot, axis=1)
