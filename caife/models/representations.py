@@ -40,8 +40,7 @@ class TreeBinning(AbstractRepresentation):
             minlength=self.n_bins_ * n_classes,
         ).reshape((self.n_bins_, n_classes))
 
-        if self.unit_scale:
-            A = A.astype(np.float64) / A.sum(axis=0, keepdims=True)
+        A = A.astype(np.float64) / A.sum(axis=0, keepdims=True)
         
         return A
         
@@ -58,7 +57,7 @@ class TreeBinning(AbstractRepresentation):
         bin_count = np.bincount(i_tree, minlength=self.n_bins_)
         # normalize sum of bin counts to 1
         if self.unit_scale:
-            bin_count = bin_count.astype(np.float64) / bin_count.shape[0]
+            bin_count = bin_count.astype(np.float64) / bin_count.sum()
 
         return bin_count
 
