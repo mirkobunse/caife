@@ -21,7 +21,7 @@ def main(
     np.random.seed(seed)
 
     # load the data
-    df = pd.read_pickle("~/data/re-funfolding/23111.pkl")
+    df = pd.read_pickle("~/data/caife/23111.pkl")
     df = df[ # apply analysis-specific cuts
         (df["FSSFilter_13_1"] == 1) &
         (df["scores"] > 0.99) &
