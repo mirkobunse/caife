@@ -88,10 +88,14 @@ class UnivariateBinning(AbstractRepresentation):
         # nothing to fit; immediately return the transformed data
         if not average:
             return self.transform(X, average=False), y
-        A = np.bincount(
-            n_classes * self._digitize(X) + y, # combined X*y bins
-            minlength=self.n_bins_ * n_classes,
-        ).reshape((self.n_bins_, n_classes))
+        #A = np.bincount(
+        #    n_classes * self._digitize(X) + y, # combined X*y bins
+        #    minlength=self.n_bins_ * n_classes,
+        #)
+        A = np.zeros((self.n_bins_, n_classes))
+        for c in range(n_classes):
+            A[:, c] = self.transform(X[y==c])
+        A = A.reshape((self.n_bins_, n_classes))
         return A.astype(np.float64) / A.sum(axis=0, keepdims=True)
 
     def transform(self, X, average=True):
