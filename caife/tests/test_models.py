@@ -55,9 +55,26 @@ class TestTreeBinning(TestCase):
         tree = DecisionTreeClassifier(max_leaf_nodes=max_n_bins_proxy).fit(X[:900], y[:900])
         binning = caife.TreeBinning(
             tree=tree,
-            fit_tree=False
+            fit_tree=False,
+            unit_scale=False
         )
-        A = binning.fit_transform(X[:900], y[:900], average=False)
+        binning_scale = caife.TreeBinning(
+            tree=tree,
+            fit_tree=False,
+            unit_scale=True
+        )
+        A = binning.fit_transform(X[:900], y[:900], average=True)
+        A_scale = binning_scale.fit_transform(X[:900], y[:900], average=True)
+
+        np.testing.assert_almost_equal(
+            actual=np.sum(A, axis=0), # shape (n_classes,)
+            desired=np.ones(n_classes),
+        )
+
+        np.testing.assert_almost_equal(
+            actual=np.sum(A_scale, axis=0), # shape (n_classes,)
+            desired=np.ones(n_classes),
+        )
 
         binned_proxy_one_hot = binning.transform(X[900:], average=False)
         tree_apply = tree.apply(X[900:])
@@ -81,6 +98,26 @@ class TestTreeBinning(TestCase):
             self.assertFalse(indices[0] in used_idx) # leaf index was not used in other bin
             used_idx.append(indices[0])
 
+        binned_proxy_total_values = binning.transform(X[900:], average=True)
+        binned_proxy_unit_scale = binning_scale.transform(X[900:], average=True)
+
+        # relative counts sum to one
+        self.assertAlmostEqual(np.sum(binned_proxy_unit_scale), 1.)
+        
+        # output of unit_scale=True == total_values / #values
+        np.testing.assert_equal(
+            binned_proxy_unit_scale,
+            binned_proxy_total_values / binned_proxy_total_values.sum()
+        )
+
+        # total_values == bincount(tree_apply)
+        counts = np.bincount(tree_apply)
+        np.testing.assert_equal(
+            binned_proxy_total_values,
+            counts[counts.nonzero()]
+        )
+
+        
 
 class TestGridSearchRepresentation(TestCase):
     def test(self):
