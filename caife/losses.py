@@ -1,15 +1,13 @@
 """Module contaning common loss functions."""
 
 import numpy as np
-from numpy.typing import ndarray
 
-def poisson_nll(g_est: ndarray, g_true: ndarray, sample_weight: ndarray | None = None):
+def poisson_nll(g_est, g_true):
     """Compute the (scaled) negative log-likelihood loss between `g_est` and `g_true`.
 
     Args:
         g_est: The estimated proxy distribution, shape `(n_proxy_bins,)`.
         g_true: The observed proxy distribution, shape `(n_proxy_bins,)`.
-        sample_weight (optional): Per-bin weights, shape `(n_proxy_bins,)`.
 
     Returns:
         The value of the (scaled) negative log likelihood.
@@ -34,4 +32,4 @@ def poisson_nll(g_est: ndarray, g_true: ndarray, sample_weight: ndarray | None =
 
     TODO: Need to evaluate whether weights should be un-normalized or normalized to len(g_est) instead of normalizing to one.
     """
-    return np.average(loss, weights=sample_weight)
+    return loss.mean()
