@@ -18,3 +18,7 @@ from .solvers import (
 from .solvers.scipy import (
     ScipySolver,
 )
+
+from .losses import (
+    poisson_nll,
+)

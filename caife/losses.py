@@ -1,9 +1,9 @@
 """Module contaning common loss functions."""
 
 import numpy as np
-from numpy.typing import ndarray
+from numpy.typing import NDArray
 
-def poisson_nll(g_est: ndarray, g_true: ndarray, sample_weight: ndarray | None = None):
+def poisson_nll(g_est: NDArray, g_true: NDArray, sample_weight: NDArray | None = None):
     """Compute the (scaled) negative log-likelihood loss between `g_est` and `g_true`.
 
     Args:

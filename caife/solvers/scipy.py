@@ -22,9 +22,9 @@ class ScipySolver(AbstractSolver):
     seed: int | None = None
 
     def solve(self, nll, target_dim, nuisance_dim, n_samples):
-        nll = lambda ell: nll( # cast to a function of the latent variable ell
+        nll_opt = lambda ell: nll( # cast to a function of the latent variable ell
             n_samples * _jnp_softmax(ell)) # TODO consider n_samples as a nuisance parameter
-        jac = jax.grad(nll) # Jacobian
+        jac = jax.grad(nll_opt) # Jacobian
         hess = jax.jacfwd(jac) # Hessian through forward-mode AD
         x0 = _rand_x0( # random starting point
             np.random.RandomState(self.seed),
@@ -35,7 +35,7 @@ class ScipySolver(AbstractSolver):
         state = _CallbackState(x0)
         try:
             opt = optimize.minimize(
-                nll,
+                nll_opt,
                 x0,
                 jac=_check_derivative(jac, "jac"), # safe-guard derivatives
                 hess=_check_derivative(hess, "hess"),
@@ -77,5 +77,7 @@ class _CallbackState():
     def _callback(self, xk):
         self._xk = xk
         self._nit += 1
+        print(f"[{self._nit}]: {xk}")
+
     def callback(self):
         return lambda xk, *args: self._callback(xk)
