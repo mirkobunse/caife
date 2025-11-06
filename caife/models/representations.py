@@ -140,16 +140,20 @@ class GridSearchRepresentation(AbstractRepresentation):
 
         # evaluate all grid_cells in parallel
         results = []
-        n_jobs = self.n_jobs
-        if n_jobs is not None and n_jobs < 1:
-            n_jobs = None
-        n_finished_cells = 0
-        with Pool(n_jobs) as pool:
-            for cell_results in pool.imap(grid_cell_fn, grid_cells):
-                results.append(cell_results)
-                n_finished_cells += 1
+        if self.n_jobs == 1:
+            for grid_cell in grid_cells:
+                results.append(grid_cell_fn(grid_cell))
                 if self.is_verbose:
-                    print(f"{self} evaluated {n_finished_cells}/{len(grid_cells)} cells")
+                    print(f"{self} evaluated {len(results)}/{len(grid_cells)} cells")
+        else:
+            n_jobs = self.n_jobs
+            if n_jobs is not None and n_jobs < 1:
+                n_jobs = None
+            with Pool(n_jobs) as pool:
+                for cell_results in pool.imap(grid_cell_fn, grid_cells):
+                    results.append(cell_results)
+                    if self.is_verbose:
+                        print(f"{self} evaluated {len(results)}/{len(grid_cells)} cells")
         self.results_ = sorted( # sort by loss (ascending)
             results,
             key=lambda result: result["losses"][self.criterion]
