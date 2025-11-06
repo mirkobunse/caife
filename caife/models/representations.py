@@ -84,6 +84,8 @@ class UnivariateBinning(AbstractRepresentation):
     def fit_transform(self, X, y, average=True, n_classes=None):
         if n_classes is None:
             n_classes = np.max(y) + 1
+        if self.proxy_bins[0] > -np.inf or self.proxy_bins[-1] < np.inf:
+            raise ValueError("proxy_bins are not defined from -inf to inf")
 
         # nothing to fit; immediately return the transformed data
         if not average:
@@ -104,11 +106,11 @@ class UnivariateBinning(AbstractRepresentation):
         return g
 
     def _digitize(self, X):
-        return np.digitize(np.asarray(X)[:, 0], self.proxy_bins)
+        return np.digitize(np.asarray(X)[:, 0], self.proxy_bins) - 1
 
     @property
     def n_bins_(self):
-        return len(self.proxy_bins) + 1 # len(bins)-1 + 2 overflow bins
+        return len(self.proxy_bins) - 1
 
 
 @dataclass

@@ -20,9 +20,9 @@ class TestTreeBinning(TestCase):
     def test_with_linear_model(self):
         X, y = make_classification(n_samples=1_000, n_features=10, n_informative=7, n_classes=4)
 
-        # TODO: changed transform_tagets such that np.digitize includes right side of intervall instead of left.
-        # so value 0 falls in bin 0, val 1 in 1 and so on.
-        target_bins = [0, 1, 2, 3, 4]
+        target_bins = np.arange(5, dtype=float) # n_classes+1 bin boundaries required
+        target_bins[0] = -np.inf # bins have to range from -inf to inf
+        target_bins[-1] = np.inf
 
         background = np.random.randn(*X.shape)
 
