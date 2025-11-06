@@ -49,6 +49,7 @@ def main(
     binning = caife.GridSearchRepresentation(
         base_binning,
         param_grid,
+        n_jobs=n_jobs,
         is_verbose=True,
     )
     _ = binning.fit_transform(X, y) # ignore the resulting matrix
@@ -65,19 +66,19 @@ def main(
         })
 
     # also evaluate the original proxy_bins
-    binning = caife.GridSearchRepresentation(
+    original_binning = caife.GridSearchRepresentation(
         caife.UnivariateBinning(np.geomspace(2e3, 8e3, 21)),
-        {},
+        {}, # empty param_grid
+        n_jobs=1,
     )
-    _ = binning.fit_transform(X, y)
-    for r in binning.results_:
-        results.append({
-            "dussap": r["losses"]["dussap"],
-            "blobel": r["losses"]["blobel"],
-            "max_leaf_nodes": -1,
-            "criterion": "",
-            "n_bins": r["representation"].n_bins_,
-        })
+    _ = original_binning.fit_transform(X, y) # ignore the resulting matrix
+    results.append({
+        "dussap": original_binning.results_[0]["losses"]["dussap"],
+        "blobel": original_binning.results_[0]["losses"]["blobel"],
+        "max_leaf_nodes": -1,
+        "criterion": "",
+        "n_bins": original_binning.results_[0]["representation"].n_bins_,
+    })
 
     # store the results
     results = pd.DataFrame(results).sort_values(["criterion", "max_leaf_nodes"])

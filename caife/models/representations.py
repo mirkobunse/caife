@@ -86,17 +86,16 @@ class UnivariateBinning(AbstractRepresentation):
             n_classes = np.max(y) + 1
 
         # nothing to fit; immediately return the transformed data
-        X = self.transform(X)
         if not average:
-            return X, y
+            return self.transform(X, average=False), y
         A = np.bincount(
-            n_classes * X + y, # combined X*y bins
+            n_classes * self._digitize(X) + y, # combined X*y bins
             minlength=self.n_bins_ * n_classes,
         ).reshape((self.n_bins_, n_classes))
         return A.astype(np.float64) / A.sum(axis=0, keepdims=True)
 
     def transform(self, X, average=True):
-        X = np.digitize(X[:, 0], self.proxy_bins)
+        X = self._digitize(X)
         if not average:
             return np.eye(self.n_bins_)[X] # one-hot encoding
         g = np.bincount(X, minlength=self.n_bins_)
@@ -104,9 +103,12 @@ class UnivariateBinning(AbstractRepresentation):
             return g / g.sum()
         return g
 
+    def _digitize(self, X):
+        return np.digitize(np.asarray(X)[:, 0], self.proxy_bins)
+
     @property
     def n_bins_(self):
-        return len(self.proxy_bins) - 1
+        return len(self.proxy_bins) + 1 # len(bins)-1 + 2 overflow bins
 
 
 @dataclass
@@ -173,7 +175,7 @@ class GridSearchRepresentation(AbstractRepresentation):
         params = dict(zip(param_grid_keys, grid_cell))
 
         # instantiate and fit the current representation
-        representation = base_representation.set_params(**params)
+        representation = base_representation.clone().set_params(**params)
         A = representation.fit_transform(X, y)
 
         # evaluate all criteria (fairly cheap; enables extensive evaluation)
