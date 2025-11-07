@@ -15,13 +15,13 @@ class TreeBinning(AbstractRepresentation):
     fit_tree: bool = True
     unit_scale: bool = True
 
-    def fit_transform(self, X, y, average=True, n_classes=None):
+    def fit_transform(self, X, y, sample_weight=None, average=True, n_classes=None):
         if n_classes is None:
             n_classes = np.max(y) + 1
 
         # fit the tree
         if self.fit_tree:
-            self.tree.fit(X, y)
+            self.tree.fit(X, y, sample_weight=sample_weight)
 
         # create a mapping from arbitrary leaf IDs to nice, consecutive IDs
         X_tree = self.tree.apply(X) # arbitrary leaf IDs
@@ -32,16 +32,16 @@ class TreeBinning(AbstractRepresentation):
 
         # return (f(X), y) if average==False
         if not average:
-            i_tree_one_hot = np.eye(self.n_bins_)[i_tree]
+            i_tree_one_hot = np.eye(self.n_bins_)[i_tree] # one-hot encoding
             return i_tree_one_hot, y
 
+        # create the transfer matrix
         A = np.bincount(
             n_classes * i_tree + y, # combined X*y bins
+            weights=sample_weight,
             minlength=self.n_bins_ * n_classes,
         ).reshape((self.n_bins_, n_classes))
-
         A = A.astype(np.float64) / A.sum(axis=0, keepdims=True)
-        
         return A
         
 
@@ -54,9 +54,10 @@ class TreeBinning(AbstractRepresentation):
             i_tree_one_hot = np.eye(self.n_bins_)[i_tree]
             return i_tree_one_hot
 
+        # create a histogram
         bin_count = np.bincount(i_tree, minlength=self.n_bins_)
-        # normalize sum of bin counts to 1
-        if self.unit_scale:
+
+        if self.unit_scale: # normalize sum of bin counts to 1
             bin_count = bin_count.astype(np.float64) / bin_count.sum()
 
         return bin_count
@@ -81,7 +82,7 @@ class UnivariateBinning(AbstractRepresentation):
     proxy_bins: list[float]
     unit_scale: bool = True
 
-    def fit_transform(self, X, y, average=True, n_classes=None):
+    def fit_transform(self, X, y, sample_weight=None, average=True, n_classes=None):
         if n_classes is None:
             n_classes = np.max(y) + 1
         if self.proxy_bins[0] > -np.inf or self.proxy_bins[-1] < np.inf:
@@ -92,6 +93,7 @@ class UnivariateBinning(AbstractRepresentation):
             return self.transform(X, average=False), y
         A = np.bincount(
             n_classes * self._digitize(X) + y, # combined X*y bins
+            weights=sample_weight,
             minlength=self.n_bins_ * n_classes,
         ).reshape((self.n_bins_, n_classes))
         return A.astype(np.float64) / A.sum(axis=0, keepdims=True)
@@ -122,7 +124,7 @@ class GridSearchRepresentation(AbstractRepresentation):
     n_jobs: int | None = None
     is_verbose: bool = False
 
-    def fit_transform(self, X, y, average=True, n_classes=None):
+    def fit_transform(self, X, y, sample_weight=None, average=True, n_classes=None):
         if not average:
             raise ValueError("GridSearchRepresentation.fit_transform requires average==True")
         if self.criterion not in ["dussap", "blobel"]:
@@ -138,6 +140,7 @@ class GridSearchRepresentation(AbstractRepresentation):
             GridSearchRepresentation._grid_cell_fn,
             X=X,
             y=y,
+            sample_weight=sample_weight,
             param_grid_keys=list(self.param_grid.keys()),
             base_representation=self.base_representation,
         )
@@ -171,6 +174,7 @@ class GridSearchRepresentation(AbstractRepresentation):
             grid_cell,
             X,
             y,
+            sample_weight,
             param_grid_keys,
             base_representation,
         ):
@@ -178,7 +182,7 @@ class GridSearchRepresentation(AbstractRepresentation):
 
         # instantiate and fit the current representation
         representation = base_representation.clone().set_params(**params)
-        A = representation.fit_transform(X, y)
+        A = representation.fit_transform(X, y, sample_weight=sample_weight)
 
         # evaluate all criteria (fairly cheap; enables extensive evaluation)
         losses = {}

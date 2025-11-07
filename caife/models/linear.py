@@ -19,12 +19,16 @@ class LinearModel(AbstractModel):
         if self.target_bins[0] > -np.inf or self.target_bins[-1] < np.inf:
             raise ValueError("target_bins are not defined from -inf to inf")
         y = self.represent_target(y)
-        A = self.representation.fit_transform(X, y, n_classes=self.n_bins_target)
+        A = self.representation.fit_transform(
+            X,
+            y,
+            sample_weight=sample_weight,
+            n_classes=self.n_bins_target,
+        )
         self.A_ = jnp.array(A) # cast A to a JAX array to make __call__ differentiable
 
-        n_bins_proxy = A.shape[0]
-
         # store the background distribution
+        n_bins_proxy = A.shape[0]
         g_background = np.zeros(n_bins_proxy)
         if background is not None:
             g_background = self.proxy_view(background)
