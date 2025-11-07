@@ -9,8 +9,14 @@ class Result:
     """Super-class for result objects that enables them to be treated like numpy arrays."""
     _f: ArrayLike
 
-    def __array__(self, dtype=None, copy=None):
+    def __array__(self, dtype=None, copy=None): # automatically cast to a numpy array
         return self._f.__array__(dtype, copy)
+
+    def __getitem__(self, item): # allow slicing
+        return self._f.__getitem__(item)
+
+    def __str__(self): # logging sugar: a concise string representation
+        return f"{self.__class__.__name__}({self._f})"
 
 
 class AbstractSolver(ABC):

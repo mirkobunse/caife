@@ -5,6 +5,51 @@ from sklearn.datasets import make_classification
 from unittest import TestCase
 import unittest
 
+
+
+class TestLinearModel(TestCase):
+    def test(self):
+        rng = np.random.default_rng(1491)
+        y = rng.uniform(size=1_000) * 4
+        X = (y + rng.normal(size=1_000)).reshape((-1, 1))
+
+        # assert that target_bins are required to range from -inf to inf
+        erroring_model = caife.LinearModel(
+            target_bins=np.arange(5), # not ranging from -inf to inf
+            representation=caife.UnivariateBinning(
+                proxy_bins=np.concatenate(([-np.inf], np.arange(5), [np.inf])),
+            )
+        )
+        self.assertRaises( # erroring_model.fit(X, y) raises a ValueError
+            ValueError,
+            erroring_model.fit,
+            X, # *args
+            y,
+        )
+
+        # assert correct target representation
+        target_bins = np.arange(5, dtype=float)
+        target_bins[0] = -np.inf
+        target_bins[-1] = np.inf
+        model = caife.LinearModel(
+            target_bins=target_bins,
+            representation=caife.UnivariateBinning(
+                proxy_bins=np.concatenate(([-np.inf], np.arange(5), [np.inf])),
+            )
+        )
+        # y ∈ [ 0, 1, 2, 3 ], X ∈ [ 0, 1, 2, 3, 4, 5 ]
+        self.assertEqual(model.represent_target(y).min(), 0)
+        self.assertEqual(model.represent_target(y).max(), 3)
+        for value in [ np.nan, np.inf, -np.inf ]:
+            self.assertRaises( # model.represent_target(inf | nan) raises a ValueError
+                ValueError,
+                model.represent_target,
+                [ value ], # *args
+            )
+        model.fit(X, y)
+        self.assertEqual(model.A_.shape, (6, 4))
+
+
 class TestTreeBinning(TestCase):
     def test_dev(self):
         X, y = make_classification(n_samples=1_000, n_features=10, n_informative=7, n_classes=4)

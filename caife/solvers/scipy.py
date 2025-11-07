@@ -47,7 +47,7 @@ class ScipySolver(AbstractSolver):
         except (DerivativeError, ValueError):
             traceback.print_exc()
             opt = state.get_state()
-        return ScipyResult(_np_softmax(opt.x), opt)
+        return ScipyResult(n_samples * _np_softmax(opt.x), opt)
 
 
 # helpers for maintaining the last result in case of an error
