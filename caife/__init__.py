@@ -21,4 +21,5 @@ from .solvers.scipy import (
 
 from .losses import (
     poisson_nll,
+    tikhonov_regularization,
 )
