@@ -7,6 +7,7 @@ config.update("jax_enable_x64", True) # TODO can we enable 64 bits locally, thro
 
 from .losses import (
     poisson_nll,
+    tikhonov_regularization,
 )
 
 from .models.representations import (
@@ -28,7 +29,6 @@ from .solvers.scipy import (
     ScipySolver,
 )
 
-from .losses import (
-    poisson_nll,
-    tikhonov_regularization,
+from .uncertainties import (
+    uncertainty_from_hessian,
 )

@@ -9,8 +9,11 @@ class Result:
     """Super-class for result objects that enables them to be treated like numpy arrays."""
     _f: ArrayLike
 
-    def __array__(self, dtype=None, copy=None): # automatically cast to a numpy array
-        return self._f.__array__(dtype, copy)
+    def __array__(self, dtype=None, copy=None): # enable automatic casting to a numpy array
+        return np.array(self._f, dtype=dtype)
+
+    def __jax_array__(self): # enable automatic casting to a JAX array
+        return jnp.array(self._f)
 
     def __getitem__(self, item): # allow slicing
         return self._f.__getitem__(item)
