@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from scipy import optimize
 from . import AbstractSolver, Result, _jnp_softmax, _np_softmax, _rand_x0
 
+
 @dataclass
 class ScipyResult(Result):
     opt: object
@@ -77,5 +78,6 @@ class _CallbackState():
     def _callback(self, xk):
         self._xk = xk
         self._nit += 1
+
     def callback(self):
         return lambda xk, *args: self._callback(xk)

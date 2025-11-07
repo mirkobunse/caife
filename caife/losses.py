@@ -1,8 +1,9 @@
 """Module contaning common loss functions."""
 
-import numpy as np
+from jax import numpy as jnp
+from jax.typing import ArrayLike
 
-def poisson_nll(g_est, g_true):
+def poisson_nll(g_est: ArrayLike, g_true: ArrayLike):
     """Compute the (scaled) negative log-likelihood loss between `g_est` and `g_true`.
 
     Args:
@@ -23,13 +24,33 @@ def poisson_nll(g_est, g_true):
 
     -log(P) = g_est - g_true * log(g_est)                         <- multiply with -1
     """
-    loss = g_est - g_true * np.log(g_est + eps)
+    loss = g_est - g_true * jnp.log(g_est + eps)
 
-    """
-    np.average normalizes the weights to sum up to 1; its equivalent to:
-        >>loss *= sample_weight / sample_weight.sum()
-        >>return np.sum(loss)
+    return loss.mean() # TODO need to evaluate whether .sum() should be used
 
-    TODO: Need to evaluate whether weights should be un-normalized or normalized to len(g_est) instead of normalizing to one.
-    """
-    return loss.mean()
+def tikhonov_regularization(f: ArrayLike):
+    """TODO: add documentation"""
+
+    # implemented according to current example in lucas/caife.ipynb
+    # f can be of shape (n_classes,) or (n_samples, n_classes)
+    # if f is of shape (n_samples, n_classes) the loss will return 
+    # a result of shape (n_samples,) equivalent to:
+    # [tikhonov(f[0]), tikhonov(f[1]), ...]
+    if f.ndim > 2:
+        raise ValueError("Invalid input! Must of dim <= 2")
+
+    C = len(f)
+
+    # f: (n_samples, n_classes)
+    if f.ndim == 2:
+        C = f.shape[1] 
+
+    # (n_classes-2, n_classes)
+    tik_mat = (
+        jnp.diag(jnp.full(C, 2)) + 
+        jnp.diag((jnp.full(C-1, -1)), -1) + 
+        jnp.diag(jnp.full(C-1, -1), 1)
+    )[1:C-1, :]
+
+    Tf = tik_mat @ f.T # (n_classes-2, n_samples)
+    return jnp.sum(Tf * Tf, axis=0) / 2 # (n_samples)
