@@ -26,7 +26,7 @@ def poisson_nll(g_est: ArrayLike, g_true: ArrayLike):
     """
     loss = g_est - g_true * jnp.log(g_est + eps)
 
-    return loss.mean() # TODO need to evaluate whether .sum() should be used
+    return loss.sum() # TODO need to evaluate whether .mean() should be used
 
 def tikhonov_regularization(f: ArrayLike):
     """TODO: add documentation"""
