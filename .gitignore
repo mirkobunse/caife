@@ -1,5 +1,6 @@
 *.pyc
 /.eggs/
+/.ipynb_checkpoints/
 /build/
 /dist/
 /venv/
