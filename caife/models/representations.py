@@ -45,7 +45,7 @@ class TreeBinning(AbstractRepresentation):
         return A
         
 
-    def transform(self, X, average=True):
+    def transform(self, X, sample_weight=None, average=True):
         X_tree = self.tree.apply(X)
         i_tree = self.bin_index_[X_tree, 1] # nice, consecutive IDs
 
@@ -55,7 +55,11 @@ class TreeBinning(AbstractRepresentation):
             return i_tree_one_hot
 
         # create a histogram
-        bin_count = np.bincount(i_tree, minlength=self.n_bins_)
+        bin_count = np.bincount(
+            i_tree,
+            weights=sample_weight,
+            minlength=self.n_bins_,
+        )
 
         if self.unit_scale: # normalize sum of bin counts to 1
             bin_count = bin_count.astype(np.float64) / bin_count.sum()
@@ -98,11 +102,11 @@ class UnivariateBinning(AbstractRepresentation):
         ).reshape((self.n_bins_, n_classes))
         return A.astype(np.float64) / A.sum(axis=0, keepdims=True)
 
-    def transform(self, X, average=True):
+    def transform(self, X, sample_weight=None, average=True):
         X = self._digitize(X)
         if not average:
             return np.eye(self.n_bins_)[X] # one-hot encoding
-        g = np.bincount(X, minlength=self.n_bins_)
+        g = np.bincount(X, weights=sample_weight, minlength=self.n_bins_)
         if self.unit_scale:
             return g / g.sum()
         return g
@@ -203,6 +207,10 @@ class GridSearchRepresentation(AbstractRepresentation):
             "A": A,
         }
 
-    def transform(self, X, average=True):
+    def transform(self, X, sample_weight=None, average=True):
         representation = self.results_[0]["representation"]
-        return representation.transform(X, average=average)
+        return representation.transform(
+            X,
+            sample_weight=sample_weight,
+            average=average,
+        )

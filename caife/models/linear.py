@@ -31,7 +31,13 @@ class LinearModel(AbstractModel):
         n_bins_proxy = A.shape[0]
         g_background = np.zeros(n_bins_proxy)
         if background is not None:
-            g_background = self.proxy_view(background)
+            if isinstance(background, tuple):
+                g_background = self.proxy_view( # background with weights
+                    background[0],
+                    sample_weight=background[1],
+                )
+            else:
+                g_background = self.proxy_view(background)
         self.g_background_ = jnp.array(g_background)
 
         # ignore systematics for now
@@ -39,8 +45,8 @@ class LinearModel(AbstractModel):
 
         return self # sklearn convention; allows method chaining
 
-    def proxy_view(self, X):
-        return self.representation.transform(X)
+    def proxy_view(self, X, sample_weight=None):
+        return self.representation.transform(X, sample_weight=sample_weight)
 
     def target_view(self, y, sample_weight=None):
         return np.bincount(
