@@ -7,13 +7,9 @@ from qunfold import AbstractRepresentation
 
 @dataclass
 class TreeBinning(AbstractRepresentation):
-    """TODO: add documentation
-
-    Args:
-        unit_scale (optional): Whether or not to scale the resulting histogram representation to a sum of one. A value of `False` indicates that the sum is the number of samples. Defaults to `True`."""
+    """TODO: add documentation"""
     tree: object
     fit_tree: bool = True
-    unit_scale: bool = True
 
     def fit_transform(self, X, y, sample_weight=None, average=True, n_classes=None):
         if n_classes is None:
@@ -26,9 +22,7 @@ class TreeBinning(AbstractRepresentation):
         # create a mapping from arbitrary leaf IDs to nice, consecutive IDs
         X_tree = self.tree.apply(X) # arbitrary leaf IDs
         self.bin_index_ = TreeBinning._create_bin_index(X_tree) # the mapping
-
-        # transform X
-        i_tree = self.bin_index_[X_tree, 1]
+        i_tree = self.bin_index_[X_tree, 1] # nice, consecutive IDs
 
         # return (f(X), y) if average==False
         if not average:
@@ -41,9 +35,7 @@ class TreeBinning(AbstractRepresentation):
             weights=sample_weight,
             minlength=self.n_bins_ * n_classes,
         ).reshape((self.n_bins_, n_classes))
-        A = A.astype(np.float64) / A.sum(axis=0, keepdims=True)
-        return A
-        
+        return A / A.sum(axis=0, keepdims=True)
 
     def transform(self, X, sample_weight=None, average=True):
         X_tree = self.tree.apply(X)
@@ -60,11 +52,7 @@ class TreeBinning(AbstractRepresentation):
             weights=sample_weight,
             minlength=self.n_bins_,
         )
-
-        if self.unit_scale: # normalize sum of bin counts to 1
-            bin_count = bin_count.astype(np.float64) / bin_count.sum()
-
-        return bin_count
+        return bin_count / bin_count.sum()
 
     @property
     def n_bins_(self):
@@ -84,7 +72,6 @@ class TreeBinning(AbstractRepresentation):
 class UnivariateBinning(AbstractRepresentation):
     """TODO: add documentation"""
     proxy_bins: list[float]
-    unit_scale: bool = True
 
     def fit_transform(self, X, y, sample_weight=None, average=True, n_classes=None):
         if n_classes is None:
@@ -100,16 +87,14 @@ class UnivariateBinning(AbstractRepresentation):
             weights=sample_weight,
             minlength=self.n_bins_ * n_classes,
         ).reshape((self.n_bins_, n_classes))
-        return A.astype(np.float64) / A.sum(axis=0, keepdims=True)
+        return A / A.sum(axis=0, keepdims=True)
 
     def transform(self, X, sample_weight=None, average=True):
         X = self._digitize(X)
         if not average:
             return np.eye(self.n_bins_)[X] # one-hot encoding
         g = np.bincount(X, weights=sample_weight, minlength=self.n_bins_)
-        if self.unit_scale:
-            return g / g.sum()
-        return g
+        return g / g.sum()
 
     def _digitize(self, X):
         return np.digitize(np.asarray(X)[:, 0], self.proxy_bins) - 1

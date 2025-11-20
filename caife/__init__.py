@@ -1,4 +1,4 @@
-__version__ = "0.0.1"
+__version__ = "0.0.2"
 
 # necessary for successful scipy.minimize
 from jax import config
@@ -18,7 +18,7 @@ from .models.representations import (
 
 from .models.linear import (
     AbstractModel,
-    LinearModel,
+    LinearCountModel,
 )
 
 from .solvers import (
