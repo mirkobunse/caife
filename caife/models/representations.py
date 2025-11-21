@@ -24,10 +24,9 @@ class TreeBinning(AbstractRepresentation):
         self.bin_index_ = TreeBinning._create_bin_index(X_tree) # the mapping
         i_tree = self.bin_index_[X_tree, 1] # nice, consecutive IDs
 
-        # return (f(X), y) if average==False
+        # return f(X) if average==False
         if not average:
-            i_tree_one_hot = np.eye(self.n_bins_)[i_tree] # one-hot encoding
-            return i_tree_one_hot, y
+            return np.eye(self.n_bins_)[i_tree] # one-hot encoding
 
         # create the transfer matrix
         A = np.bincount(
@@ -81,7 +80,7 @@ class UnivariateBinning(AbstractRepresentation):
 
         # nothing to fit; immediately return the transformed data
         if not average:
-            return self.transform(X, average=False), y
+            return self.transform(X, average=False)
         A = np.bincount(
             n_classes * self._digitize(X) + y, # combined X*y bins
             weights=sample_weight,
