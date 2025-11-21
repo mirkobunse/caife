@@ -8,6 +8,7 @@ description = "Composable and Auto-differentiable Inversion of Fredholm Equation
 dependencies = [
     "jax",
     "numpy",
+    "optax",
     "qunfold>=0.1.5",
     "scipy",
 ]

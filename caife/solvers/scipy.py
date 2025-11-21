@@ -18,36 +18,44 @@ class ScipySolver(AbstractSolver):
     solver: str = "trust-ncg"
     solver_options: dict[str,object] = field(default_factory=lambda: {
         "gtol": 1e-8,
-        "maxiter": 1000
+        "maxiter": 1000,
     })
     seed: int | None = None
 
     def solve(self, nll, target_dim, nuisance_dim, n_samples):
         nll_ell = lambda ell: nll( # cast to a function of the latent variable ell
             n_samples * _jnp_softmax(ell)) # TODO consider n_samples as a nuisance parameter
-        jac = jax.grad(nll_ell) # Jacobian
-        hess = jax.jacfwd(jac) # Hessian through forward-mode AD
         x0 = _rand_x0( # random starting point
             np.random.RandomState(self.seed),
             target_dim,
         )
-
-        # error-robust optimization with a callback state
-        state = _CallbackState(x0)
-        try:
-            opt = optimize.minimize(
-                nll_ell,
-                x0,
-                jac=_check_derivative(jac, "jac"), # safe-guard derivatives
-                hess=_check_derivative(hess, "hess"),
-                method=self.solver,
-                options=self.solver_options,
-                callback=state.callback(),
-            )
-        except (DerivativeError, ValueError):
-            traceback.print_exc()
-            opt = state.get_state()
+        opt = minimize(nll_ell, x0, self.solver, self.solver_options)
         return ScipyResult(n_samples * _np_softmax(opt.x), opt)
+
+
+def minimize(loss_fn, x0, solver="trust-ncg", solver_options=None):
+    """TODO document."""
+    if solver_options is None:
+        solver_options = { "gtol": 1e-8, "maxiter": 1000 }
+    jac = jax.grad(loss_fn) # Jacobian
+    hess = jax.jacfwd(jac) # Hessian through forward-mode AD
+
+    # error-robust optimization with a callback state
+    state = _CallbackState(x0)
+    try:
+        opt = optimize.minimize(
+            loss_fn,
+            x0,
+            jac=_check_derivative(jac, "jac"), # safe-guard derivatives
+            hess=_check_derivative(hess, "hess"),
+            method=solver,
+            options=solver_options,
+            callback=state.callback(),
+        )
+    except (DerivativeError, ValueError):
+        traceback.print_exc()
+        opt = state.get_state()
+    return opt
 
 
 # helpers for maintaining the last result in case of an error

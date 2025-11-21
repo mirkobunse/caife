@@ -1,7 +1,9 @@
 import numpy as np
 import jax.numpy as jnp
 from . import AbstractModel
+from ..solvers.scipy import minimize
 from dataclasses import dataclass
+from optax.losses import softmax_cross_entropy
 from qunfold import AbstractRepresentation
 
 @dataclass
@@ -19,7 +21,7 @@ class LinearCountModel(AbstractModel):
     target_bins: list[float]
     representation: AbstractRepresentation
 
-    def fit(self, X, y, sample_weight=None, systematics=None, background=None):
+    def fit(self, X, y, sample_weight=None, background=None):
         if self.target_bins[0] > -np.inf or self.target_bins[-1] < np.inf:
             raise ValueError("target_bins are not defined from -inf to inf")
         y = self.represent_target(y)
@@ -43,9 +45,6 @@ class LinearCountModel(AbstractModel):
             else:
                 g_background = self.proxy_view(background)
         self.g_background_ = jnp.array(g_background)
-
-        # ignore systematics for now
-        # self.systematics_ = systematics
 
         return self # sklearn convention; allows method chaining
 
@@ -81,3 +80,76 @@ class LinearCountModel(AbstractModel):
     @property
     def n_bins_target(self):
         return len(self.target_bins) - 1
+
+
+@dataclass
+class LinearSystematicsCountModel(LinearCountModel):
+    """TODO: document."""
+
+    def fit(self, X, y, sample_weight=None, systematics=None, background=None):
+        if self.target_bins[0] > -np.inf or self.target_bins[-1] < np.inf:
+            raise ValueError("target_bins are not defined from -inf to inf")
+        if systematics is None:
+            raise ValueError("No systematics given; use a LinearCountModel instead")
+        y = self.represent_target(y)
+        fX, y = self.representation.fit_transform(
+            X,
+            y,
+            sample_weight=sample_weight,
+            n_classes=self.n_bins_target,
+            average=False,
+        )
+
+        # fit parameters of logistic regressions that estimate A for systematics
+        # A[p,t] ~ softmax_t(<a, (s, 1)>) with a = (a', b)
+        systematics = jnp.concatenate( # append a one-column for the bias term
+            (systematics, jnp.ones((systematics.shape[0], 1))),
+            axis=1,
+        )
+        target_mask = jax.nn.one_hot(y, self.n_bins_target)
+        A_shape = (
+            X.shape[1], # = p = n_bins_proxy
+            self.n_bins_target, # = t = n_bins_target
+            systematics.shape[1], # = s = n_systematic_params
+        )
+        def loss_fn(A):
+            return softmax_cross_entropy(
+                jnp.einsum( # compute logits
+                    "pts,ns,nt->np", # n = n_samples; for others, see A_shape
+                    A.reshape(A_shape), # shape (p, t, s)
+                    systematics, # shape (n, s)
+                    target_mask, # shape (n, t)
+                ),
+                fX, # one-hot encoding of proxy bins
+            ).mean()
+        opt = minimize(
+            loss_fn,
+            x0=jnp.zeros(A_shape).reshape(-1), # initial guess: all zeros
+        )
+        self.coeffs_ = opt.x.reshape(A_shape) # optimized coefficients
+
+        # store the background distribution
+        n_bins_proxy = A.shape[0]
+        g_background = np.zeros(n_bins_proxy)
+        if background is not None:
+            if isinstance(background, tuple): # background with weights
+                g_background = self.proxy_view(
+                    background[0],
+                    sample_weight=background[1],
+                )
+            else:
+                g_background = self.proxy_view(background)
+        self.g_background_ = jnp.array(g_background)
+
+        return self
+
+    def A(self, s):
+        """Estimate the transfer matrix `A` for some systematics vector `s`."""
+        return jax.nn.softmax( # p=n_bins_proxy, t=n_bins_target, s=n_systematic_params
+            jnp.einsum("pts,s->pt", self.coeffs_, jnp.concatenate((s, jnp.ones(1)))),
+            axis=0, # for each target bin, apply softmax over all proxy bins
+        )
+
+    def __call__(self, f, s):
+        g_pred = self.A(s) @ f + self.g_background_
+        return g_pred
