@@ -92,7 +92,7 @@ class LinearSystematicsCountModel(LinearCountModel):
         if systematics is None:
             raise ValueError("No systematics given; use a LinearCountModel instead")
         y = self.represent_target(y)
-        fX, y = self.representation.fit_transform(
+        X = self.representation.fit_transform(
             X,
             y,
             sample_weight=sample_weight,
@@ -120,7 +120,7 @@ class LinearSystematicsCountModel(LinearCountModel):
                     systematics, # shape (n, s)
                     target_mask, # shape (n, t)
                 ),
-                fX, # one-hot encoding of proxy bins
+                X, # one-hot encoding of proxy bins
             ).mean()
         opt = minimize(
             loss_fn,
