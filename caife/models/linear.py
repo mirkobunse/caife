@@ -1,8 +1,9 @@
 import numpy as np
-import jax.numpy as jnp
+import jax
 from . import AbstractModel
 from ..solvers.scipy import minimize
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from jax import numpy as jnp
 from optax.losses import softmax_cross_entropy
 from qunfold import AbstractRepresentation
 
@@ -85,6 +86,12 @@ class LinearCountModel(AbstractModel):
 @dataclass
 class LinearSystematicsCountModel(LinearCountModel):
     """TODO: document."""
+    C: float | None = None
+    solver: str = "L-BFGS-B" # same as in sklearn's LogisticRegression
+    solver_options: dict[str,object] = field(default_factory=lambda: {
+        "gtol": 1e-8,
+        "maxiter": 100,
+    })
 
     def fit(self, X, y, sample_weight=None, systematics=None, background=None):
         if self.target_bins[0] > -np.inf or self.target_bins[-1] < np.inf:
@@ -102,6 +109,8 @@ class LinearSystematicsCountModel(LinearCountModel):
 
         # fit parameters of logistic regressions that estimate A for systematics
         # A[p,t] ~ softmax_t(<a, (s, 1)>) with a = (a', b)
+        systematics = systematics - systematics.min(axis=0) # normalize to [0, 1]
+        systematics = systematics / systematics.max(axis=0)
         systematics = jnp.concatenate( # append a one-column for the bias term
             (systematics, jnp.ones((systematics.shape[0], 1))),
             axis=1,
@@ -112,24 +121,33 @@ class LinearSystematicsCountModel(LinearCountModel):
             self.n_bins_target, # = t = n_bins_target
             systematics.shape[1], # = s = n_systematic_params
         )
+        C = self.C
         def loss_fn(A):
-            return softmax_cross_entropy(
-                jnp.einsum( # compute logits
-                    "pts,ns,nt->np", # n = n_samples; for others, see A_shape
-                    A.reshape(A_shape), # shape (p, t, s)
-                    systematics, # shape (n, s)
-                    target_mask, # shape (n, t)
+            loss = jnp.average(
+                softmax_cross_entropy(
+                    jnp.einsum( # compute logits
+                        "pts,ns,nt->np", # n = n_samples; for others, see A_shape
+                        A.reshape(A_shape), # shape (p, t, s)
+                        systematics, # shape (n, s)
+                        target_mask, # shape (n, t)
+                    ),
+                    X, # one-hot encoding of proxy bins
                 ),
-                X, # one-hot encoding of proxy bins
-            ).mean()
+                weights=sample_weight,
+            )
+            if C is not None: # regularize
+                return loss + A @ A / (2 * C * len(X))
+            return loss
         opt = minimize(
             loss_fn,
             x0=jnp.zeros(A_shape).reshape(-1), # initial guess: all zeros
+            solver=self.solver,
+            solver_options=self.solver_options,
         )
         self.coeffs_ = opt.x.reshape(A_shape) # optimized coefficients
 
         # store the background distribution
-        n_bins_proxy = A.shape[0]
+        n_bins_proxy = self.coeffs_.shape[0]
         g_background = np.zeros(n_bins_proxy)
         if background is not None:
             if isinstance(background, tuple): # background with weights

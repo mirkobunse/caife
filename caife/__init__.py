@@ -19,6 +19,7 @@ from .models.representations import (
 from .models.linear import (
     AbstractModel,
     LinearCountModel,
+    LinearSystematicsCountModel,
 )
 
 from .solvers import (
