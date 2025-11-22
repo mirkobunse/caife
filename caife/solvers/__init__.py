@@ -8,6 +8,7 @@ from numpy.typing import ArrayLike
 class Result:
     """Super-class for result objects that enables them to be treated like numpy arrays."""
     _f: ArrayLike
+    nuisance_parameters: ArrayLike | None
 
     def __array__(self, dtype=None, copy=None): # enable automatic casting to a numpy array
         return np.array(self._f, dtype=dtype)

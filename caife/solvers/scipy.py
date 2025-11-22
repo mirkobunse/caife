@@ -23,14 +23,26 @@ class ScipySolver(AbstractSolver):
     seed: int | None = None
 
     def solve(self, nll, target_dim, nuisance_dim, n_samples):
-        nll_ell = lambda ell: nll( # cast to a function of the latent variable ell
-            n_samples * _jnp_softmax(ell)) # TODO consider n_samples as a nuisance parameter
-        x0 = _rand_x0( # random starting point
-            np.random.RandomState(self.seed),
-            target_dim,
-        )
+        if nuisance_dim > 0: # if yes, nll has two arguments
+            nll_ell = lambda ell: nll( # cast to a function of the latent variable ell
+                n_samples * _jnp_softmax(ell[:(target_dim-1)]),
+                jax.nn.sigmoid(ell[(target_dim-1):]),
+            )
+        else:
+            nll_ell = lambda ell: nll(n_samples * _jnp_softmax(ell))
+        x0 = np.concatenate((
+            _rand_x0( # random starting point for target
+                np.random.RandomState(self.seed),
+                target_dim,
+            ),
+            np.ones(nuisance_dim) * .5 # random starting point for nuisance parameters
+        ))
         opt = minimize(nll_ell, x0, self.solver, self.solver_options)
-        return ScipyResult(n_samples * _np_softmax(opt.x), opt)
+        f_est = n_samples * _np_softmax(opt.x[:(target_dim-1)])
+        nuisance_parameters = None
+        if nuisance_dim > 0:
+            nuisance_parameters = np.array(jax.nn.sigmoid(opt.x[(target_dim-1):]))
+        return ScipyResult(f_est, nuisance_parameters, opt)
 
 
 def minimize(loss_fn, x0, solver="trust-ncg", solver_options=None):
