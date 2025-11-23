@@ -122,6 +122,12 @@ class LinearSystematicsCountModel(LinearCountModel):
             systematics.shape[1], # = s = n_systematic_params
         )
         C = self.C
+        if sample_weight is not None:
+            class_weight = jnp.sum( # normalize weights per class to unit sum
+                target_mask * sample_weight.reshape((-1, 1)),
+                axis=0,
+            )
+            sample_weight = sample_weight / class_weight[y]
         def loss_fn(A):
             loss = jnp.average(
                 softmax_cross_entropy(
