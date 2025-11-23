@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from functools import partial
 from multiprocessing import Pool
 from qunfold import AbstractRepresentation
+from qunfold.methods import class_prevalences, check_y
 
 @dataclass
 class TreeBinning(AbstractRepresentation):
@@ -12,8 +13,9 @@ class TreeBinning(AbstractRepresentation):
     fit_tree: bool = True
 
     def fit_transform(self, X, y, sample_weight=None, average=True, n_classes=None):
-        if n_classes is None:
-            n_classes = np.max(y) + 1
+        check_y(y, n_classes)
+        self.p_trn = class_prevalences(y, n_classes)
+        n_classes = len(self.p_trn) # not None anymore
 
         # fit the tree
         if self.fit_tree:
@@ -73,8 +75,9 @@ class UnivariateBinning(AbstractRepresentation):
     proxy_bins: list[float]
 
     def fit_transform(self, X, y, sample_weight=None, average=True, n_classes=None):
-        if n_classes is None:
-            n_classes = np.max(y) + 1
+        check_y(y, n_classes)
+        self.p_trn = class_prevalences(y, n_classes)
+        n_classes = len(self.p_trn) # not None anymore
         if self.proxy_bins[0] > -np.inf or self.proxy_bins[-1] < np.inf:
             raise ValueError("proxy_bins are not defined from -inf to inf")
 
@@ -129,6 +132,7 @@ class GridSearchRepresentation(AbstractRepresentation):
             X=X,
             y=y,
             sample_weight=sample_weight,
+            n_classes=n_classes,
             param_grid_keys=list(self.param_grid.keys()),
             base_representation=self.base_representation,
         )
@@ -163,6 +167,7 @@ class GridSearchRepresentation(AbstractRepresentation):
             X,
             y,
             sample_weight,
+            n_classes,
             param_grid_keys,
             base_representation,
         ):
@@ -170,7 +175,12 @@ class GridSearchRepresentation(AbstractRepresentation):
 
         # instantiate and fit the current representation
         representation = base_representation.clone().set_params(**params)
-        A = representation.fit_transform(X, y, sample_weight=sample_weight)
+        A = representation.fit_transform(
+            X,
+            y,
+            sample_weight=sample_weight,
+            n_classes=n_classes,
+        )
 
         # evaluate all criteria (fairly cheap; enables extensive evaluation)
         losses = {}

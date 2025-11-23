@@ -128,6 +128,8 @@ class LinearSystematicsCountModel(LinearCountModel):
                 axis=0,
             )
             sample_weight = sample_weight / class_weight[y]
+        else:
+            sample_weight = np.ones(len(y)) / representation.p_trn
         def loss_fn(A):
             loss = jnp.average(
                 softmax_cross_entropy(
