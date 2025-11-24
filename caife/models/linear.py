@@ -106,6 +106,11 @@ class LinearSystematicsCountModel(LinearCountModel):
             n_classes=self.n_bins_target,
             average=False,
         )
+        is_finite = np.all(np.isfinite(X), axis=1)
+        X = X[is_finite,:]
+        y = y[is_finite]
+        if sample_weight is not None:
+            sample_weight = sample_weight[is_finite]
 
         # fit parameters of logistic regressions that estimate A for systematics
         # A[p,t] ~ softmax_t(<a, (s, 1)>) with a = (a', b)
@@ -116,12 +121,13 @@ class LinearSystematicsCountModel(LinearCountModel):
             axis=1,
         )
         target_mask = jax.nn.one_hot(y, self.n_bins_target)
-        A_shape = (
+        coeffs_shape = (
             X.shape[1], # = p = n_bins_proxy
             self.n_bins_target, # = t = n_bins_target
             systematics.shape[1], # = s = n_systematic_params
         )
-        C = self.C
+        self.A_mask = jnp.einsum( # check where the full matrix is > 0
+            "np,nt,n->pt", X, target_mask, sample_weight) > 0
         if sample_weight is not None:
             class_weight = jnp.sum( # normalize weights per class to unit sum
                 target_mask * sample_weight.reshape((-1, 1)),
@@ -130,12 +136,12 @@ class LinearSystematicsCountModel(LinearCountModel):
             sample_weight = sample_weight / class_weight[y]
         else:
             sample_weight = np.ones(len(y)) / representation.p_trn
-        def loss_fn(A):
+        def loss_fn(coeffs):
             loss = jnp.average(
                 softmax_cross_entropy(
-                    jnp.einsum( # compute logits
-                        "pts,ns,nt->np", # n = n_samples; for others, see A_shape
-                        A.reshape(A_shape), # shape (p, t, s)
+                    jnp.einsum( # compute logits for each sample
+                        "pts,ns,nt->np", # n = n_samples; for others, see coeffs_shape
+                        coeffs.reshape(coeffs_shape), # shape (p, t, s)
                         systematics, # shape (n, s)
                         target_mask, # shape (n, t)
                     ),
@@ -143,16 +149,16 @@ class LinearSystematicsCountModel(LinearCountModel):
                 ),
                 weights=sample_weight,
             )
-            if C is not None: # regularize
-                return loss + A @ A / (2 * C * len(X))
+            if self.C is not None: # regularize
+                return loss + coeffs @ coeffs / (2 * self.C * len(X))
             return loss
         opt = minimize(
             loss_fn,
-            x0=jnp.zeros(A_shape).reshape(-1), # initial guess: all zeros
+            x0=jnp.zeros(coeffs_shape).reshape(-1), # initial guess: all zeros
             solver=self.solver,
             solver_options=self.solver_options,
         )
-        self.coeffs_ = opt.x.reshape(A_shape) # optimized coefficients
+        self.coeffs_ = opt.x.reshape(coeffs_shape) # optimized coefficients
 
         # store the background distribution
         n_bins_proxy = self.coeffs_.shape[0]
@@ -174,6 +180,7 @@ class LinearSystematicsCountModel(LinearCountModel):
         return jax.nn.softmax( # p=n_bins_proxy, t=n_bins_target, s=n_systematic_params
             jnp.einsum("pts,s->pt", self.coeffs_, jnp.concatenate((s, jnp.ones(1)))),
             axis=0, # for each target bin, apply softmax over all proxy bins
+            where=self.A_mask,
         )
 
     def __call__(self, f, s):
