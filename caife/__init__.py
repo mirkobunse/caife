@@ -32,5 +32,4 @@ from .solvers.scipy import (
 
 from .uncertainties import (
     uncertainty_from_hessian,
-    systematic_uncertainty_from_hessian,
 )

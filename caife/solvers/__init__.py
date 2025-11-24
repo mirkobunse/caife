@@ -22,6 +22,14 @@ class Result:
     def __str__(self): # logging sugar: a concise string representation
         return f"{self.__class__.__name__}({self._f})"
 
+    def zip(self, fs=None, s=None):
+        if s is None and fs is not None: # split fs -> (f, s)
+            return fs[:len(self._f)], fs[len(self._f):]
+        if fs is None:
+            fs = self._f
+            s = self.nuisance_parameters
+        return jnp.concatenate((fs, s)) # concatenate (f, s) -> fs
+
 
 class AbstractSolver(ABC):
     """Abstract Base Class all caife Solvers inherit from."""
