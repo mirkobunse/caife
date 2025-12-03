@@ -4,51 +4,30 @@ import numpy as np
 import traceback
 from dataclasses import dataclass, field
 from scipy import optimize
-from . import AbstractSolver, Result, _jnp_softmax, _np_softmax, _rand_x0
+from . import AbstractSolver, Result
 
 
-@dataclass
-class ScipyResult(Result):
-    opt: object
+SOLVER_OPTIONS_FACTORY = lambda: {
+    "gtol": 1e-8,
+    "maxiter": 1000,
+}
 
 
 @dataclass
 class ScipySolver(AbstractSolver):
     """TODO: document."""
     solver: str = "trust-ncg"
-    solver_options: dict[str,object] = field(default_factory=lambda: {
-        "gtol": 1e-8,
-        "maxiter": 1000,
-    })
-    seed: int | None = None
+    solver_options: dict[str,object] = field(default_factory=SOLVER_OPTIONS_FACTORY)
 
-    def solve(self, nll, target_dim, nuisance_dim, n_samples):
-        if nuisance_dim > 0: # if yes, nll has two arguments
-            nll_ell = lambda ell: nll( # cast to a function of the latent variable ell
-                n_samples * _jnp_softmax(ell[:(target_dim-1)]),
-                jax.nn.sigmoid(ell[(target_dim-1):]),
-            )
-        else:
-            nll_ell = lambda ell: nll(n_samples * _jnp_softmax(ell))
-        x0 = np.concatenate((
-            _rand_x0( # random starting point for target
-                np.random.RandomState(self.seed),
-                target_dim,
-            ),
-            np.zeros(nuisance_dim), # random starting point for nuisance parameters
-        ))
-        opt = minimize(nll_ell, x0, self.solver, self.solver_options)
-        f_est = n_samples * _np_softmax(opt.x[:(target_dim-1)])
-        nuisance_parameters = None
-        if nuisance_dim > 0:
-            nuisance_parameters = np.array(jax.nn.sigmoid(opt.x[(target_dim-1):]))
-        return ScipyResult(f_est, nuisance_parameters, opt)
+    def solve_latent(self, latent_nll, x0):
+        opt = minimize(latent_nll, x0, self.solver, self.solver_options)
+        return opt.x, { "opt": opt }
 
 
 def minimize(loss_fn, x0, solver="trust-ncg", solver_options=None):
     """TODO document."""
     if solver_options is None:
-        solver_options = { "gtol": 1e-8, "maxiter": 1000 }
+        solver_options = SOLVER_OPTIONS_FACTORY()
     jac = jax.grad(loss_fn) # Jacobian
     hess = jax.jacfwd(jac) # Hessian through forward-mode AD
 

@@ -114,8 +114,8 @@ class LinearSystematicsCountModel(LinearCountModel):
 
         # fit parameters of logistic regressions that estimate A for systematics
         # A[p,t] ~ softmax_t(<a, (s, 1)>) with a = (a', b)
-        systematics = systematics - systematics.min(axis=0) # normalize to [0, 1]
-        systematics = systematics / systematics.max(axis=0)
+        self.systematic_bounds = np.stack(
+            (systematics.min(axis=0), systematics.max(axis=0))).T
         systematics = jnp.concatenate( # append a one-column for the bias term
             (systematics, jnp.ones((systematics.shape[0], 1))),
             axis=1,

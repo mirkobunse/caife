@@ -24,6 +24,9 @@ from .models.linear import (
 
 from .solvers import (
     AbstractSolver,
+    AbstractLatentVector,
+    LatentSpectrum,
+    LatentSystematics,
 )
 
 from .solvers.scipy import (
