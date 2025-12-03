@@ -35,7 +35,7 @@ class ScipySolver(AbstractSolver):
                 np.random.RandomState(self.seed),
                 target_dim,
             ),
-            np.ones(nuisance_dim) * .5 # random starting point for nuisance parameters
+            np.zeros(nuisance_dim), # random starting point for nuisance parameters
         ))
         opt = minimize(nll_ell, x0, self.solver, self.solver_options)
         f_est = n_samples * _np_softmax(opt.x[:(target_dim-1)])
