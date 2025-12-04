@@ -12,6 +12,15 @@ SOLVER_OPTIONS_FACTORY = lambda: {
     "maxiter": 1000,
 }
 
+SECOND_ORDER_SOLVERS = [
+    "newton-cg",
+    "dogleg",
+    "trust-ncg",
+    "trust-krylov",
+    "trust-exact",
+    "trust-constr",
+]
+
 
 @dataclass
 class ScipySolver(AbstractSolver):
@@ -29,7 +38,9 @@ def minimize(loss_fn, x0, solver="trust-ncg", solver_options=None):
     if solver_options is None:
         solver_options = SOLVER_OPTIONS_FACTORY()
     jac = jax.grad(loss_fn) # Jacobian
-    hess = jax.jacfwd(jac) # Hessian through forward-mode AD
+    hess = None
+    if solver.lower() in SECOND_ORDER_SOLVERS:
+        hess = jax.jacfwd(jac) # Hessian through forward-mode AD
 
     # error-robust optimization with a callback state
     state = _CallbackState(x0)
@@ -55,6 +66,8 @@ class DerivativeError(Exception):
         super().__init__(f"infs and NaNs in {name}: {result}")
 
 def _check_derivative(jac_or_hess, name):
+    if jac_or_hess is None:
+        return None
     return lambda x: _check_derivative_at_x(jac_or_hess, name, x)
 
 def _check_derivative_at_x(jac_or_hess, name, x):
