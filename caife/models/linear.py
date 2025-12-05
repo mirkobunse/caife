@@ -152,13 +152,13 @@ class LinearSystematicsCountModel(LinearCountModel):
             if self.C is not None: # regularize
                 return loss + coeffs @ coeffs / (2 * self.C * len(X))
             return loss
-        opt = minimize(
+        self.opt_ = minimize(
             loss_fn,
             x0=jnp.zeros(coeffs_shape).reshape(-1), # initial guess: all zeros
             solver=self.solver,
             solver_options=self.solver_options,
         )
-        self.coeffs_ = opt.x.reshape(coeffs_shape) # optimized coefficients
+        self.coeffs_ = self.opt_.x.reshape(coeffs_shape) # optimized coefficients
 
         # store the background distribution
         n_bins_proxy = self.coeffs_.shape[0]
