@@ -28,14 +28,14 @@ class TreeBinning(AbstractRepresentation):
 
         # return f(X) if average==False
         if not average:
-            return np.eye(self.n_bins_)[i_tree] # one-hot encoding
+            return np.eye(self.n_output_features)[i_tree] # one-hot encoding
 
         # create the transfer matrix
         A = np.bincount(
             n_classes * i_tree + y, # combined X*y bins
             weights=sample_weight,
-            minlength=self.n_bins_ * n_classes,
-        ).reshape((self.n_bins_, n_classes))
+            minlength=self.n_output_features * n_classes,
+        ).reshape((self.n_output_features, n_classes))
         return A / A.sum(axis=0, keepdims=True)
 
     def transform(self, X, sample_weight=None, average=True):
@@ -44,19 +44,19 @@ class TreeBinning(AbstractRepresentation):
 
         # return f(X) if average==False
         if not average:
-            i_tree_one_hot = np.eye(self.n_bins_)[i_tree]
+            i_tree_one_hot = np.eye(self.n_output_features)[i_tree]
             return i_tree_one_hot
 
         # create a histogram
         bin_count = np.bincount(
             i_tree,
             weights=sample_weight,
-            minlength=self.n_bins_,
+            minlength=self.n_output_features,
         )
         return bin_count / bin_count.sum()
 
     @property
-    def n_bins_(self):
+    def n_output_features(self):
         return self.bin_index_[:, 1].max() + 1 # the highest bin ID
 
     @staticmethod
@@ -87,22 +87,22 @@ class UnivariateBinning(AbstractRepresentation):
         A = np.bincount(
             n_classes * self._digitize(X) + y, # combined X*y bins
             weights=sample_weight,
-            minlength=self.n_bins_ * n_classes,
-        ).reshape((self.n_bins_, n_classes))
+            minlength=self.n_output_features * n_classes,
+        ).reshape((self.n_output_features, n_classes))
         return A / A.sum(axis=0, keepdims=True)
 
     def transform(self, X, sample_weight=None, average=True):
         X = self._digitize(X)
         if not average:
-            return np.eye(self.n_bins_)[X] # one-hot encoding
-        g = np.bincount(X, weights=sample_weight, minlength=self.n_bins_)
+            return np.eye(self.n_output_features)[X] # one-hot encoding
+        g = np.bincount(X, weights=sample_weight, minlength=self.n_output_features)
         return g / g.sum()
 
     def _digitize(self, X):
         return np.digitize(np.asarray(X)[:, 0], self.proxy_bins) - 1
 
     @property
-    def n_bins_(self):
+    def n_output_features(self):
         return len(self.proxy_bins) - 1
 
 
@@ -208,3 +208,8 @@ class GridSearchRepresentation(AbstractRepresentation):
             sample_weight=sample_weight,
             average=average,
         )
+
+    @property
+    def n_output_features(self):
+        representation = self.results_[0]["representation"]
+        return representation.n_output_features

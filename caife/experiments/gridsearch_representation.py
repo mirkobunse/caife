@@ -62,7 +62,7 @@ def main(
             "blobel": r["losses"]["blobel"],
             "max_leaf_nodes": r["params"]["tree__max_leaf_nodes"],
             "criterion": r["params"]["tree__criterion"],
-            "n_bins": r["representation"].n_bins_, # <= max_leaf_nodes
+            "n_bins": r["representation"].n_output_features, # <= max_leaf_nodes
         })
 
     # also evaluate the original proxy_bins
@@ -77,7 +77,7 @@ def main(
         "blobel": original_binning.results_[0]["losses"]["blobel"],
         "max_leaf_nodes": -1,
         "criterion": "",
-        "n_bins": original_binning.results_[0]["representation"].n_bins_,
+        "n_bins": original_binning.results_[0]["representation"].n_output_features,
     })
 
     # store the results

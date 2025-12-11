@@ -7,14 +7,14 @@ import unittest
 
 
 
-class TestLinearModel(TestCase):
+class TestLinearCountModel(TestCase):
     def test(self):
         rng = np.random.default_rng(1491)
         y = rng.uniform(size=1_000) * 4
         X = (y + rng.normal(size=1_000)).reshape((-1, 1))
 
         # assert that target_bins are required to range from -inf to inf
-        erroring_model = caife.LinearModel(
+        erroring_model = caife.LinearCountModel(
             target_bins=np.arange(5), # not ranging from -inf to inf
             representation=caife.UnivariateBinning(
                 proxy_bins=np.concatenate(([-np.inf], np.arange(5), [np.inf])),
@@ -31,7 +31,7 @@ class TestLinearModel(TestCase):
         target_bins = np.arange(5, dtype=float)
         target_bins[0] = -np.inf
         target_bins[-1] = np.inf
-        model = caife.LinearModel(
+        model = caife.LinearCountModel(
             target_bins=target_bins,
             representation=caife.UnivariateBinning(
                 proxy_bins=np.concatenate(([-np.inf], np.arange(5), [np.inf])),
@@ -76,7 +76,7 @@ class TestTreeBinning(TestCase):
         binning = caife.TreeBinning(
             tree=DecisionTreeClassifier(max_leaf_nodes=max_n_bins_proxy),
         )
-        model = caife.LinearModel(target_bins, binning)
+        model = caife.LinearCountModel(target_bins, binning)
         model.fit(X, y, background=background)
 
         # check that max_leaf_nodes is respected
@@ -121,7 +121,7 @@ class TestTreeBinning(TestCase):
 
         # test that all values get binned correctly
         used_idx = []
-        for val in range(binning.n_bins_):
+        for val in range(binning.n_output_features):
             indices = np.unique(tree_apply[binned_proxy_idx == val])
             self.assertEqual(indices.shape[0], 1) # all vals are in same leaf if they are in the same bin
             self.assertFalse(indices[0] in used_idx) # leaf index was not used in other bin
