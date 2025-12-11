@@ -33,11 +33,12 @@ class AbstractModel(ABC):
         pass
 
     @abstractmethod
-    def __call__(self, f):
+    def __call__(self, f, s):
         """Apply this model to a candidate spectrum.
 
         Args:
             f: A candidate spectrum, shape `(n_target_bins,)`.
+            s: A vector of systematic parameter values, shape `(n_systematic_parameters,)`.
 
         Returns:
             The predicted proxy distribution `g`, shape `(n_proxy_bins,)`, as modeled for `f`.

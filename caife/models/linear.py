@@ -66,7 +66,7 @@ class LinearCountModel(AbstractModel):
             raise ValueError("y contains nans or infs")
         return np.digitize(y, self.target_bins) - 1
 
-    def __call__(self, f):
+    def __call__(self, f, s=None):
         g_pred = self.A_ @ f + self.g_background_
         return g_pred
 
