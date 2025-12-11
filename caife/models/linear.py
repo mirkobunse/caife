@@ -22,20 +22,14 @@ class LinearCountModel(AbstractModel):
     target_bins: list[float]
     representation: AbstractRepresentation
 
-    def fit(self, X, y, sample_weight=None, background=None):
+    def fit(self, X, y, sample_weight=None, systematics=None, background=None):
         if self.target_bins[0] > -np.inf or self.target_bins[-1] < np.inf:
             raise ValueError("target_bins are not defined from -inf to inf")
         y = self.represent_target(y)
-        A = self.representation.fit_transform(
-            X,
-            y,
-            sample_weight=sample_weight,
-            n_classes=self.n_bins_target,
-        )
-        self.A_ = jnp.array(A) # cast A to a JAX array to make __call__ differentiable
+        self._fit_transfer(X, y, sample_weight, systematics)
 
         # store the background distribution
-        n_bins_proxy = A.shape[0]
+        n_bins_proxy = self.representation.n_output_features
         g_background = np.zeros(n_bins_proxy)
         if background is not None:
             if isinstance(background, tuple): # background with weights
@@ -48,6 +42,20 @@ class LinearCountModel(AbstractModel):
         self.g_background_ = jnp.array(g_background)
 
         return self # sklearn convention; allows method chaining
+
+    def _fit_transfer(self, X, y, sample_weight, systematics):
+        """Fit the transfer model `A(s)`."""
+        A = self.representation.fit_transform( # constant; no systematics modeled
+            X,
+            y,
+            sample_weight=sample_weight,
+            n_classes=self.n_bins_target,
+        )
+        self.A_ = jnp.array(A) # cast A to a JAX array to make __call__ differentiable
+
+    def A(self, s=None):
+        """Estimate the transfer matrix `A` for some systematics vector `s`."""
+        return self.A_ # constant if no systematics are modeled
 
     def proxy_view(self, X, sample_weight=None):
         g = self.representation.transform(X, sample_weight=sample_weight)
@@ -67,7 +75,7 @@ class LinearCountModel(AbstractModel):
         return np.digitize(y, self.target_bins) - 1
 
     def __call__(self, f, s=None):
-        g_pred = self.A_ @ f + self.g_background_
+        g_pred = self.A(s) @ f + self.g_background_
         return g_pred
 
     @property
@@ -93,12 +101,9 @@ class LinearSystematicsCountModel(LinearCountModel):
         "maxiter": 100,
     })
 
-    def fit(self, X, y, sample_weight=None, systematics=None, background=None):
-        if self.target_bins[0] > -np.inf or self.target_bins[-1] < np.inf:
-            raise ValueError("target_bins are not defined from -inf to inf")
+    def _fit_transfer(self, X, y, sample_weight=None, systematics=None):
         if systematics is None:
             raise ValueError("No systematics given; use a LinearCountModel instead")
-        y = self.represent_target(y)
         X = self.representation.fit_transform(
             X,
             y,
@@ -160,29 +165,42 @@ class LinearSystematicsCountModel(LinearCountModel):
         )
         self.coeffs_ = self.opt_.x.reshape(coeffs_shape) # optimized coefficients
 
-        # store the background distribution
-        n_bins_proxy = self.coeffs_.shape[0]
-        g_background = np.zeros(n_bins_proxy)
-        if background is not None:
-            if isinstance(background, tuple): # background with weights
-                g_background = self.proxy_view(
-                    background[0],
-                    sample_weight=background[1],
-                )
-            else:
-                g_background = self.proxy_view(background)
-        self.g_background_ = jnp.array(g_background)
-
-        return self
-
     def A(self, s):
-        """Estimate the transfer matrix `A` for some systematics vector `s`."""
         return jax.nn.softmax( # p=n_bins_proxy, t=n_bins_target, s=n_systematic_params
             jnp.einsum("pts,s->pt", self.coeffs_, jnp.concatenate((s, jnp.ones(1)))),
             axis=0, # for each target bin, apply softmax over all proxy bins
             where=self.A_mask,
         )
 
-    def __call__(self, f, s):
-        g_pred = self.A(s) @ f + self.g_background_
-        return g_pred
+
+@dataclass
+class LinearSystematicsScaleCountModel(LinearCountModel):
+    """The scaling vector that models systematics in funfolding. TODO: document."""
+
+    def _fit_transfer(self, X, y, sample_weight=None, systematics=None):
+        if systematics is None:
+            raise ValueError("No systematics given; use a LinearCountModel instead")
+        X = self.representation.fit_transform(
+            X,
+            y,
+            sample_weight=sample_weight,
+            n_classes=self.n_bins_target,
+            average=False,
+        )
+        is_finite = np.all(np.isfinite(X), axis=1)
+        X = X[is_finite,:]
+        y = y[is_finite]
+        if sample_weight is not None:
+            sample_weight = sample_weight[is_finite]
+
+        # compute the regular full matrix
+        target_mask = jax.nn.one_hot(y, self.n_bins_target)
+        self.A_ = jnp.einsum("np,nt,n->pt", X, target_mask, sample_weight)
+
+        # do what funfolding does
+        self.systematic_bounds = np.stack(
+            (systematics.min(axis=0), systematics.max(axis=0))).T
+        # TODO
+
+    def A(self, s):
+        return None # TODO
