@@ -17,4 +17,12 @@ def uncertainty_from_hessian(f_est, nll):
     hess = jax.jacfwd(jax.grad(fn))(f_est.zip()) # joint Hessian at result
 
     # compute the bin-wise errors, just as Minuit does
-    return np.sqrt(np.diagonal(np.linalg.inv(np.sqrt(.5) * hess)))[:len(np.array(f_est))]
+    errors = np.sqrt(np.diagonal(np.linalg.inv(np.sqrt(.5) * hess)))
+    if len(f_est.values) > 1:
+        target_dims = [ len(x) for x in f_est.values ]
+        boundaries = np.concatenate(([0], np.cumsum(target_dims)))
+        return (
+            errors[boundaries[i]:boundaries[i+1]]
+            for i in range(len(boundaries)-1)
+        )
+    return errors
