@@ -41,6 +41,7 @@ dynamic = [ "version" ]
 docs = [ "jax[cpu]", "myst-parser", "scikit-learn", "sphinx-rtd-theme" ]
 experiments = [ "jax[cpu]", "pandas", "scikit-learn" ]
 tests = [ "jax[cpu]", "scikit-learn" ]
+notebooks = [ "mpl_interactions[jupyter]" ]
 
 [tool.setuptools.dynamic]
 version = { attr = "caife.__version__" }
