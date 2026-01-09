@@ -24,7 +24,7 @@ class TestTikhonovRegularization(TestCase):
         binning = caife.TreeBinning(
             tree=DecisionTreeClassifier(max_leaf_nodes=max_n_bins_proxy),
         )
-        model = caife.LinearModel(target_bins, binning)
+        model = caife.LinearCountModel(target_bins, binning)
         model.fit(X, y, background=background)
 
         A = model.A_
