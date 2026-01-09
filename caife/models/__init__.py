@@ -3,7 +3,7 @@
 from abc import ABC, abstractmethod
 
 class AbstractModel(ABC):
-    """Abstract Base Class all caife Models inherit from."""
+    """Abstract base class that all caife models inherit from."""
 
     @abstractmethod
     def fit(self, X, y, sample_weight=None, systematics=None, background=None):
