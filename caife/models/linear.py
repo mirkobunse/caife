@@ -1,3 +1,5 @@
+"""Module containing linear models of the measurement process."""
+
 import numpy as np
 import jax
 from . import AbstractModel
@@ -9,7 +11,7 @@ from qunfold import AbstractRepresentation
 
 @dataclass
 class LinearCountModel(AbstractModel):
-    """Linear Model for solving `g = A @ f + b` over count histograms `g`, `f`, and `b`.
+    """Linear model for solving `g = A @ f + b` over count histograms `g`, `f`, and `b`.
 
     Args:
         target_bins: Bin boundaries of the target quantity, shape (n_target_bins+1,).
@@ -70,6 +72,7 @@ class LinearCountModel(AbstractModel):
         return f * (len(y) / f.sum()) # scale to counts
 
     def represent_target(self, y):
+        """Represent each individual target through binning."""
         if not np.isfinite(y).all():
             raise ValueError("y contains nans or infs")
         return np.digitize(y, self.target_bins) - 1
@@ -93,7 +96,21 @@ class LinearCountModel(AbstractModel):
 
 @dataclass
 class LinearSystematicsCountModel(LinearCountModel):
-    """TODO: document."""
+    """Linear systematics-aware model for solving `g = A(s) @ f + b` over count histograms `g`, `f`, and `b` and over a vector of systematic parameters `s`.
+
+    Each column of `A(s)` (representing the mean feature embedding of one target bin) is modeled as one logistic regression that takes `s` as its input. Through this choice, each column is always properly normalized to a unit sum and each cell varies monotonically with the corresponding entry in `s`. The full matrix model `A(s)`, consisting of all target bin-associated columns, has `n_proxy_bins * n_target_bins * (n_systematic_parameters + 1)` parameters, which is only `(n_systematic_parameters + 1)` times more than a static, systematics-unaware matrix would have.
+
+    Args:
+        target_bins: Bin boundaries of the target quantity, shape (n_target_bins+1,).
+        representation: The data representation that is computed from the proxy features.
+        C (optional): The regularization strength for each logistic regression model, with the behavior defined by scikit-learn. Defaults to `None` for no regularization.
+        solver (optional): The `method` argument in `scipy.optimize.minimize`. Defaults to "L-BFGS-B".
+        solver_options (optional): The `options` argument in `scipy.optimize.minimize`. Defaults to `{ "gtol": 1e-8, "maxiter": 100 }`.
+
+    Attributes:
+        n_background_samples: Number of background samples, set during `fit` but meant to be manually changed to the actual number of background samples after fitting.
+        n_bins_target: Number of target bins, as determined by the `target_bins`.
+    """
     C: float | None = None
     solver: str = "L-BFGS-B" # same as in sklearn's LogisticRegression
     solver_options: dict[str,object] = field(default_factory=lambda: {
@@ -171,36 +188,3 @@ class LinearSystematicsCountModel(LinearCountModel):
             axis=0, # for each target bin, apply softmax over all proxy bins
             where=self.A_mask,
         )
-
-
-@dataclass
-class LinearSystematicsScaleCountModel(LinearCountModel):
-    """The scaling vector that models systematics in funfolding. TODO: document."""
-
-    def _fit_transfer(self, X, y, sample_weight=None, systematics=None):
-        if systematics is None:
-            raise ValueError("No systematics given; use a LinearCountModel instead")
-        X = self.representation.fit_transform(
-            X,
-            y,
-            sample_weight=sample_weight,
-            n_classes=self.n_bins_target,
-            average=False,
-        )
-        is_finite = np.all(np.isfinite(X), axis=1)
-        X = X[is_finite,:]
-        y = y[is_finite]
-        if sample_weight is not None:
-            sample_weight = sample_weight[is_finite]
-
-        # compute the regular full matrix
-        target_mask = jax.nn.one_hot(y, self.n_bins_target)
-        self.A_ = jnp.einsum("np,nt,n->pt", X, target_mask, sample_weight)
-
-        # do what funfolding does
-        self.systematic_bounds = np.stack(
-            (systematics.min(axis=0), systematics.max(axis=0))).T
-        # TODO
-
-    def A(self, s):
-        return None # TODO

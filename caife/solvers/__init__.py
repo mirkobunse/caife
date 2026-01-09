@@ -1,3 +1,5 @@
+"""Module containing solvers of unfolding equations."""
+
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -52,7 +54,11 @@ class Result:
 
 @dataclass
 class AbstractSolver(ABC):
-    """Abstract Base Class all caife Solvers inherit from."""
+    """Abstract base class that all caife solvers inherit from.
+
+    Args:
+        seed: Random number generator seed. Defaults to `None`.
+    """
     seed: int | None = None
 
     def solve(self, nll, *latent_vectors):
@@ -101,7 +107,7 @@ class AbstractSolver(ABC):
 
 
 class AbstractLatentVector(ABC):
-    """Abstract base class for the latent variables with which caife solvers minimize negative log-likelihoods."""
+    """Abstract base class for the latent variables over which caife solvers minimize negative log-likelihoods."""
 
     @abstractmethod
     def __call__(self, ell):
@@ -129,7 +135,12 @@ class AbstractLatentVector(ABC):
 
 @dataclass
 class LatentSpectrum(AbstractLatentVector):
-    """TODO document: soft-max "trick"."""
+    """Transforms a vector of latent variables through the "soft-max trick" by Bunse (2022) and scales it by the given number of samples. Through this design choice, the output will always be a valid count spectrum with all bin-wise counts larger than zero and the sum of all bin counts equal to the given number of samples.
+
+    Args:
+        n_samples: The desired number of samples.
+        n_bins_target: The number of target bins.
+    """
     n_samples: int
     n_bins_target: int
 
@@ -144,7 +155,7 @@ class LatentSpectrum(AbstractLatentVector):
 
 @dataclass
 class LatentSystematics(AbstractLatentVector):
-    """TODO document.
+    """Transforms a latent variable through a sigmoid that is scaled to match the given bounds. Through this design choice, the value of the systematic parameter will always be within the given bounds.
 
     Args:
         bounds: The minimum and maximum value for each systematic parameter, shape (n_systematic_parameters, 2).

@@ -7,12 +7,13 @@ from scipy import optimize
 from . import AbstractSolver, Result
 
 
+"""Factory function, without arguments, to create solver options."""
 SOLVER_OPTIONS_FACTORY = lambda: {
     "gtol": 1e-8,
     "maxiter": 1000,
 }
 
-SECOND_ORDER_SOLVERS = [
+_SECOND_ORDER_SOLVERS = [
     "newton-cg",
     "dogleg",
     "trust-ncg",
@@ -24,7 +25,13 @@ SECOND_ORDER_SOLVERS = [
 
 @dataclass
 class ScipySolver(AbstractSolver):
-    """TODO: document."""
+    """A solver with a SciPy back-end.
+
+    Args:
+        seed: Random number generator seed. Defaults to `None`.
+        solver (optional): The `method` argument in `scipy.optimize.minimize`. Defaults to "trust-ncg".
+        solver_options (optional): The `options` argument in `scipy.optimize.minimize`. Defaults to `caife.solvers.scipy.SOLVER_OPTIONS_FACTORY()`.
+    """
     solver: str = "trust-ncg"
     solver_options: dict[str,object] = field(default_factory=SOLVER_OPTIONS_FACTORY)
 
@@ -34,12 +41,22 @@ class ScipySolver(AbstractSolver):
 
 
 def minimize(loss_fn, x0, solver="trust-ncg", solver_options=None):
-    """TODO document."""
+    """Minimize a loss function with a SciPy back-end.
+
+    Args:
+        loss_fn: The loss function to minimize.
+        x0: The initial guess (i.e., starting point) for the minimization.
+        solver (optional): The `method` argument in `scipy.optimize.minimize`. Defaults to "trust-ncg".
+        solver_options (optional): The `options` argument in `scipy.optimize.minimize`. Defaults to `None`, which is interpreted as `caife.solvers.scipy.SOLVER_OPTIONS_FACTORY()`.
+
+    Returns:
+        A `scipy.optimize.OptimizeResult`.
+    """
     if solver_options is None:
         solver_options = SOLVER_OPTIONS_FACTORY()
     jac = jax.grad(loss_fn) # Jacobian
     hess = None
-    if solver.lower() in SECOND_ORDER_SOLVERS:
+    if solver.lower() in _SECOND_ORDER_SOLVERS:
         hess = jax.jacfwd(jac) # Hessian through forward-mode AD
 
     # error-robust optimization with a callback state

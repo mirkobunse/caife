@@ -1,4 +1,4 @@
-"""Module contaning common loss functions."""
+"""Module containing common loss functions."""
 
 from jax import numpy as jnp
 from jax.typing import ArrayLike
@@ -29,7 +29,14 @@ def poisson_nll(g_est: ArrayLike, g_true: ArrayLike):
     return loss.sum() # TODO need to evaluate whether .mean() should be used
 
 def tikhonov_regularization(f: ArrayLike):
-    """TODO: add documentation"""
+    """Compute the Tikhonov regularization.
+
+    Args:
+        f: A candidate solution to regularize.
+
+    Returns:
+        The (un-scaled) value of the Tikhonov regularization.
+    """
 
     # implemented according to current example in lucas/caife.ipynb
     # f can be of shape (n_classes,) or (n_samples, n_classes)

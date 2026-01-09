@@ -1,3 +1,5 @@
+"""Module containing estimators of uncertainty."""
+
 import jax
 import numpy as np
 from .solvers import Result
@@ -5,7 +7,15 @@ from jax import numpy as jnp
 from functools import partial
 
 def uncertainty_from_hessian(f_est, nll):
-    """Estimate uncertainties like Minuit does."""
+    """Estimate uncertainties in the style of Minuit.
+
+    Args:
+        f_est: The estimated spectrum, shape (n_target_bins,).
+        nll: The negative log-likelihood function that `f_est` minimizes.
+
+    Returns:
+        A vector of bin-wise errors, shape (n_target_bins,).
+    """
     if not isinstance(f_est, Result):
         raise ValueError("f_est must be of type caife.solvers.Result")
 
