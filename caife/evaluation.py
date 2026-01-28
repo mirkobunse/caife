@@ -2,7 +2,7 @@
 
 import jax
 import numpy as np
-from ..solvers import Result
+from .solvers import Result
 
 def total_correlation_score(f_est, nll):
     """Compute the total correlation score as the sum of all inter-bin correlations. This score should be minimal in unfolding because the true target bins should be uncorrelated, such that any correlations are artifacts that stem from the reconstruction process.
