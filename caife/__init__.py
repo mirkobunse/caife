@@ -22,11 +22,6 @@ from .models.linear import (
     LinearSystematicsCountModel,
 )
 
-from .models.model_selection import (
-    total_correlation_score,
-    logarithmic_earth_movers_distance,
-)
-
 from .solvers import (
     AbstractSolver,
     AbstractLatentVector,
@@ -36,6 +31,11 @@ from .solvers import (
 
 from .solvers.scipy import (
     ScipySolver,
+)
+
+from .evaluation import (
+    total_correlation_score,
+    logarithmic_earth_movers_distance,
 )
 
 from .uncertainties import (
