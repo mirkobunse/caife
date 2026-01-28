@@ -1,5 +1,8 @@
+"""Module containing scores for the evaluation of a model's results."""
+
 import jax
 import numpy as np
+from ..solvers import Result
 
 def total_correlation_score(f_est, nll):
     """Compute the total correlation score as the sum of all inter-bin correlations. This score should be minimal in unfolding because the true target bins should be uncorrelated, such that any correlations are artifacts that stem from the reconstruction process.
@@ -24,9 +27,9 @@ def total_correlation_score(f_est, nll):
     # compute the covariance / error matrix, as in Minuit, and derive the correlation
     cov = np.linalg.inv(np.sqrt(.5) * hess)
     corr = cov / np.sqrt(np.diagonal(cov) * np.diagonal(cov).reshape(-1,1))
-    corr = corr[:len(jnp.array(f_est)), :len(jnp.array(f_est))] # ignore nuisance parameters
+    corr = corr[:len(np.array(f_est)), :len(np.array(f_est))] # ignore nuisance parameters
     corr = corr[1:-1, 1:-1] # also ignore the under- and overflow bins
-    return np.sum(np.abs(np.triu(corr, k=1)))
+    return np.sum(np.abs(np.triu(corr, k=1))) # the sum of all off-diagonal entries
 
 
 def logarithmic_earth_movers_distance(f_true, f_est):
