@@ -34,7 +34,8 @@ from .solvers.scipy import (
 )
 
 from .evaluation import (
-    total_correlation_score,
+    global_correlation_coefficient,
+    pairwise_correlation_score,
     logarithmic_earth_movers_distance,
 )
 
