@@ -1,5 +1,6 @@
 import argparse
 import matplotlib.pyplot as plt
+import numpy as np
 import os
 import pandas as pd
 
@@ -13,6 +14,19 @@ def main(results_path, plot_path):
     results = pd.read_csv(results_path, index_col=0)
     sources = results["source"].unique()
     targets = results["target"].unique()
+
+    # hack: parse nasty string representations
+    if results["emd"].dtype != np.float64:
+        import re
+        def map_bullshit_to_gold(v):
+            matches = re.findall(r"\d+\.\d+", str(v))
+            if str(v) == "nan":
+                return np.nan
+            if len(matches) > 0:
+                return float(matches[0])
+            print("BULLSHIT", v)
+            raise
+        results["emd"] = [map_bullshit_to_gold(v) for v in results["emd"]]
 
     # initialize the plot
     fig, axs = plt.subplots(
@@ -39,7 +53,7 @@ def main(results_path, plot_path):
             ax.set_xlabel(r"$\tau$")
             # ax.set_ylabel("global corr.")
             ax.set_title(f"{source} → {target}")
-            ax.grid(True, which="both", ls="--")
+            ax.set_ylim(bottom=0.725, top=1.025)
             ax2 = ax.twinx()
             if target != "real":
                 l2 = ax2.plot(
@@ -60,6 +74,8 @@ def main(results_path, plot_path):
                     label="n_df (r)",
                 )
                 # ax2.set_ylabel("n_df")
+            ax2.set_ylim(bottom=5e-2, top=2e1)
+            ax2.grid(True, ls="--")
             best_tau = ax_results[  # minimum gcc for tau <= 1e0
                 ax_results["gcc"] == ax_results["gcc"][ax_results["tau"]<=1].min()
             ]["tau"].iloc[0]

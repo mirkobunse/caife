@@ -180,7 +180,7 @@ def main(
             )
             if target != "real":
                 f_tst = model.target_view(y_tst)  # the true solution
-                emd = jnp.abs(jnp.cumsum(  # Earth Mover's Distance in log space
+                emd = np.abs(np.cumsum(  # Earth Mover's Distance in log space
                     np.log10(f_tst[1:-1]) - np.log10(f_est[1:-1])
                 )).sum(),
             else:
