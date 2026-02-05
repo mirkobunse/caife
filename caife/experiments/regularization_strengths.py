@@ -4,6 +4,8 @@ import itertools
 import numpy as np
 import os
 import pandas as pd
+import time
+from datetime import datetime, timedelta
 from jax import numpy as jnp
 from sklearn.model_selection import train_test_split
 from tqdm import tqdm
@@ -97,14 +99,15 @@ def main(
 
     # iterate over all (source, target) transfer_settings of PRIMARY_MODELS
     transfer_settings = list(itertools.product(
-        PRIMARY_MODELS,
+        PRIMARY_MODELS[:1] if is_test_run else PRIMARY_MODELS,
         [*PRIMARY_MODELS, "real"],
     ))
     sampling_state = np.random.RandomState(seed)  # RandomState for data sampling
     solver_state = np.random.RandomState(seed)  # RandomState for unfolding
     results = []  # where to store results
     for i_transfer_setting, (source, target) in enumerate(transfer_settings):
-        desc = f"[{i_transfer_setting}/{len(transfer_settings)}]"
+        desc = f"[{i_transfer_setting+1}/{len(transfer_settings)}]"
+        t_init = time.time()
 
         if target != "real":
             w_source = weights[source]  # source domain weights
@@ -128,7 +131,10 @@ def main(
             X_tst = X_obs
 
         # fit a caife model with systematics
-        print(f"{desc} {source}->{target} | Fitting a model with systematics...")
+        print(
+            f"{desc} {datetime.now().strftime('%H:%M:%S')} |",
+            f"Fitting a model for {source} → {target}...",
+        )
         model = caife.LinearSystematicsCountModel(
             TARGET_BINS,
             PROXY_BINNING,
@@ -138,7 +144,10 @@ def main(
             },
         )
         model.fit(X_trn, y_trn, sample_weight=w_trn, systematics=S_trn)
-        print(f"{desc} {source}->{target} | Fitting took {model.opt_.wallclock_time} s")
+        print(
+            f"{desc} {datetime.now().strftime('%H:%M:%S')} |",
+            f"Fitting took {model.opt_.wallclock_time:.1f} s, {model.opt_.nit} it",
+        )
 
         # define a factory for negative log-likelihood functions
         def create_nll(model, X_tst, tau=0.0004):
@@ -156,9 +165,8 @@ def main(
         unreg_nll = create_nll(model, X_tst, None)
 
         # evaluate a broad range of tau values
-        results = []
         tau_values = np.logspace(10, -8, 4 if is_test_run else 55)
-        for tau in tqdm(tau_values, ncols=80, desc=f"{desc} Solving..."):
+        for tau in tqdm(tau_values, ncols=80, desc=f"{desc} Solving"):
             nll = create_nll(model, X_tst, tau)
             solver = caife.ScipySolver(
                 seed=solver_state.randint(np.iinfo(np.uint32).max),
@@ -188,6 +196,16 @@ def main(
                 "ndf": caife.effective_number_of_degrees_of_freedom(f_est, unreg_nll, tau),
                 "emd": emd,
             })
+
+        # compute ETA from the time spent in this transfer setting
+        wallclock_time = time.time() - t_init
+        time_remaining = (len(transfer_settings) - (i_transfer_setting+1)) * wallclock_time
+        eta = datetime.now() + timedelta(seconds=time_remaining)
+        print(
+            f"{desc} {datetime.now().strftime('%H:%M:%S')} |",
+            f"{source} → {target} took {wallclock_time:.1f} s;",
+            f"ETA: {eta.strftime('%Y-%m-%d %H:%M:%S')}",
+        )
 
     # store the results
     results = pd.DataFrame(results)

@@ -64,7 +64,8 @@ def pairwise_correlation_score(f_est, nll, ignore_overflow_bins=True):
 
     # compute the covariance / error matrix, as in Minuit, and derive the correlation
     cov = np.linalg.inv(np.sqrt(.5) * hess)
-    corr = cov / np.sqrt(np.diagonal(cov) * np.diagonal(cov).reshape(-1,1))
+    with np.errstate(invalid="ignore"):
+        corr = cov / np.sqrt(np.diagonal(cov) * np.diagonal(cov).reshape(-1,1))
     corr = corr[:len(np.array(f_est)), :len(np.array(f_est))] # ignore nuisance parameters
     if ignore_overflow_bins:
         corr = corr[1:-1, 1:-1]
