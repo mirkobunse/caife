@@ -30,8 +30,9 @@ def global_correlation_coefficient(f_est, nll, ignore_overflow_bins=True):
     hess = hess[:len(np.array(f_est)), :len(np.array(f_est))] # ignore systematics
 
     # bin-wise coefficients, see p. 28 in James (2006)
-    global_correlation_coefficients = np.sqrt(
-        1 - 1 / (np.diagonal(np.linalg.inv(hess)) * np.diagonal(hess)))
+    with np.errstate(invalid="ignore"):
+        global_correlation_coefficients = np.sqrt(
+            1 - 1 / (np.diagonal(np.linalg.inv(hess)) * np.diagonal(hess)))
 
     # mean value, see Fig 10.9 and Eq. 10.39 in Morik & Rhode (2023)
     if ignore_overflow_bins:
