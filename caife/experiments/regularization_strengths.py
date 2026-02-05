@@ -39,8 +39,43 @@ A_EFF = np.array([  # effective area (ignoring it's std for now)
 ])
 
 
+def read_data(path, is_training_data):
+    df = pd.read_pickle(path)
+    df = df[  # apply analysis-specific cuts
+        (df["FSSFilter_13_1"] == 1)
+        & (df["scores"] > 0.99)
+        & (df["depth_unc"] < 60)
+        & (df["zenith_unc_no_filter"] < 0.1)
+    ]
+    X = df[["range_no_filter"]].to_numpy()  # proxy: propagated distance of muons
+    if not is_training_data:
+        livetime = np.mean(df[["livetime"]])  # constant value -> use mean
+        print(f"Read {X.shape[0]} observed samples")
+        return X, livetime
+    y = df["energy_stop"].to_numpy()  # target: muon energy at the surface
+    weights = {m: df[m].to_numpy() for m in PRIMARY_MODELS}
+    S = df[[  # systematic parameters
+        "Absorption",
+        "DOMEfficiency",
+        "Scattering",
+        # "HoleIceForward_Unified_p0",
+        # "HoleIceForward_Unified_p1",
+    ]].to_numpy()
+    i_finite = np.isfinite(y) # discard NaN targets
+    X = X[i_finite]
+    y = y[i_finite]
+    for k in weights.keys():
+        weights[k] = weights[k][i_finite]
+    S = S[i_finite]
+    print(f"Discarded {len(i_finite) - i_finite.sum()} NaN targets")
+    print(f"Read {X.shape[0]} training samples")
+    return X, y, weights, S
+
+
 def main(
     output_path,
+    mc_path="~/data/caife/23111_final.pkl",
+    obs_path="~/data/caife/2020.pkl",
     seed=1491,
     is_test_run=False,
 ):
@@ -54,63 +89,46 @@ def main(
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
     np.random.seed(seed)
 
-    # load the data (unzip from /cephfs_projects/caife/23111.pkl.zip)
-    df = pd.read_pickle("~/data/caife/23111.pkl")
+    # load the MC training data (unzip from /cephfs_projects/caife/23111_final.pkl.zip)
+    X, y, weights, S = read_data(mc_path, is_training_data=True)
 
-    # apply analysis-specific cuts
-    df = df[
-        (df["FSSFilter_13_1"] == 1)
-        & (df["scores"] > 0.99)
-        & (df["depth_unc"] < 60)
-        & (df["zenith_unc_no_filter_02"] < 0.1)
-    ]
-    X = df[["range_no_filter_02"]].to_numpy()  # proxy: propagated distance of muons
-    y = df["energy_stop"].to_numpy()  # target: muon energy at the surface
-    weights = {m: df[m].to_numpy() for m in PRIMARY_MODELS}
-    S = df[[  # systematic parameters
-        "Absorption",
-        "DOMEfficiency",
-        "Scattering",
-        # "HoleIceForward_Unified_p0",
-        # "HoleIceForward_Unified_p1",
-    ]].to_numpy()
-    del df  # free some memory
-    print(f"Read MC samples with shape {X.shape}")
-
-    # discard NaN targets
-    i_finite = np.isfinite(y)
-    X = X[i_finite]
-    y = y[i_finite]
-    for k in weights.keys():
-        weights[k] = weights[k][i_finite]
-    S = S[i_finite]
-    print(f"Discarded {len(i_finite) - i_finite.sum()} NaN and Inf targets")
+    # load the real observation data (unzip from /cephfs_projects/caife/2020.pkl.zip)
+    X_obs, livetime_obs = read_data(obs_path, is_training_data=False)
 
     # iterate over all (source, target) transfer_settings of PRIMARY_MODELS
-    transfer_settings = list(itertools.product(PRIMARY_MODELS, PRIMARY_MODELS))
+    transfer_settings = list(itertools.product(
+        PRIMARY_MODELS,
+        [*PRIMARY_MODELS, "real"],
+    ))
     sampling_state = np.random.RandomState(seed)  # RandomState for data sampling
     solver_state = np.random.RandomState(seed)  # RandomState for unfolding
     results = []  # where to store results
     for i_transfer_setting, (source, target) in enumerate(transfer_settings):
-        desc = f"[{i_transfer_setting}/{len(transfer_settings)}] {source}->{target}"
-        w_source = weights[source]  # source domain weights
-        w_target = weights[target]  # target domain weights
+        desc = f"[{i_transfer_setting}/{len(transfer_settings)}]"
 
-        # train-test split with a bootstrapped test set
-        X_trn, X_tst, y_trn, y_tst, w_trn, _, _, w_tst, S_trn, S_tst = train_test_split(
-            X, y, w_source, w_target, S, train_size=0.8, random_state=sampling_state
-        )
-        i_tst = sampling_state.choice(  # bootstrapping
-            np.arange(len(y_tst)),
-            p=w_tst / w_tst.sum(),
-            replace=True,
-            size=len(y_tst),
-        )
-        X_tst, y_tst, S_tst = X_tst[i_tst], y_tst[i_tst], S_tst[i_tst]
-        del w_tst  # weights should only be used for bootstrapping
+        if target != "real":
+            w_source = weights[source]  # source domain weights
+            w_target = weights[target]  # target domain weights
+
+            # train-test split with a bootstrapped test set
+            X_trn, X_tst, y_trn, y_tst, w_trn, _, _, w_tst, S_trn, _ = train_test_split(
+                X, y, w_source, w_target, S, train_size=0.8, random_state=sampling_state
+            )
+            i_tst = sampling_state.choice(  # bootstrapping
+                np.arange(len(y_tst)),
+                p=w_tst / w_tst.sum(),
+                replace=True,
+                size=len(y_tst),
+            )
+            X_tst, y_tst = X_tst[i_tst], y_tst[i_tst]
+            del w_tst  # weights should only be used for bootstrapping
+
+        else:
+            X_trn, y_trn, w_trn, S_trn = X, y, weights[source], S
+            X_tst = X_obs
 
         # fit a caife model with systematics
-        print(f"{desc} | Fitting a model with systematics...")
+        print(f"{desc} {source}->{target} | Fitting a model with systematics...")
         model = caife.LinearSystematicsCountModel(
             TARGET_BINS,
             PROXY_BINNING,
@@ -120,7 +138,7 @@ def main(
             },
         )
         model.fit(X_trn, y_trn, sample_weight=w_trn, systematics=S_trn)
-        print(f"{desc} | Fitting took {model.opt_.wallclock_time} s")
+        print(f"{desc} {source}->{target} | Fitting took {model.opt_.wallclock_time} s")
 
         # define a factory for negative log-likelihood functions
         def create_nll(model, X_tst, tau=0.0004):
@@ -139,9 +157,8 @@ def main(
 
         # evaluate a broad range of tau values
         results = []
-        f_tst = model.target_view(y_tst)  # the true solution
-        n_tau_values = 4 if is_test_run else 55
-        for tau in tqdm(np.logspace(10, -8, n_tau_values), ncols=80, desc=desc):
+        tau_values = np.logspace(10, -8, 4 if is_test_run else 55)
+        for tau in tqdm(tau_values, ncols=80, desc=f"{desc} Solving..."):
             nll = create_nll(model, X_tst, tau)
             solver = caife.ScipySolver(
                 seed=solver_state.randint(np.iinfo(np.uint32).max),
@@ -153,6 +170,13 @@ def main(
                 ),
                 caife.LatentSystematics(bounds=model.systematic_bounds),
             )
+            if target != "real":
+                f_tst = model.target_view(y_tst)  # the true solution
+                emd = jnp.abs(jnp.cumsum(  # Earth Mover's Distance in log space
+                    np.log10(f_tst[1:-1]) - np.log10(f_est[1:-1])
+                )).sum(),
+            else:
+                emd = np.nan
             results.append({  # store the results
                 "source": source,
                 "target": target,
@@ -161,9 +185,8 @@ def main(
                 "pcs": caife.pairwise_correlation_score(f_est, nll),
                 "unreg_gcc": caife.global_correlation_coefficient(f_est, unreg_nll),
                 "unreg_pcs": caife.pairwise_correlation_score(f_est, unreg_nll),
-                "emd": jnp.abs(jnp.cumsum(  # Earth Mover's Distance in log space
-                    np.log10(f_tst[1:-1]) - np.log10(f_est[1:-1])
-                )).sum(),
+                "ndf": caife.effective_number_of_degrees_of_freedom(f_est, unreg_nll, tau),
+                "emd": emd,
             })
 
     # store the results
@@ -181,6 +204,18 @@ if __name__ == "__main__":
         help="path of an output *.csv file",
     )
     parser.add_argument(
+        "--mc_path",
+        type=str,
+        default="~/data/caife/23111_final.pkl",
+        help="path of an input *.pkl file with MC training data",
+    )
+    parser.add_argument(
+        "--obs_path",
+        type=str,
+        default="~/data/caife/2020.pkl",
+        help="path of an input *.pkl file with observed real data",
+    )
+    parser.add_argument(
         "--seed",
         type=int,
         default=1491,
@@ -191,6 +226,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
     main(
         args.output_path,
+        args.mc_path,
+        args.obs_path,
         args.seed,
         args.is_test_run,
     )

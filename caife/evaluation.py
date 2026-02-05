@@ -71,6 +71,44 @@ def pairwise_correlation_score(f_est, nll, ignore_overflow_bins=True):
     return np.mean(np.abs(np.triu(corr, k=1))) # the sum of all off-diagonal entries
 
 
+def effective_number_of_degrees_of_freedom(f_est, unreg_nll, tau, ignore_overflow_bins=True):
+    """Compute the effective number of degrees of freedom, as of Blobel (1985, 2002).
+
+    Args:
+        f_est: The estimated spectrum, shape (n_target_bins,).
+        unreg_nll: The un-regularized variant of the negative log-likelihood function that `f_est` minimizes.
+        tau: The strength of the Tikhonov regularization.
+        ignore_overflow_bins (optional): Whether to ignore the correlations with the two over- and underflow bins. Defaults to `True`.
+
+    Returns:
+        The effective number of degrees of freedom.
+    """
+    if not isinstance(f_est, Result):
+        raise ValueError("f_est must be of type caife.solvers.Result")
+
+    # compute the Hessian for the spectrum, ignoring any nuisance parameters
+    if len(f_est.values) > 1:
+        fn = lambda vec: unreg_nll(vec, f_est.values[1]) # assume nll: (f, s) -> loss
+    else:
+        fn = unreg_nll # assume nll: f -> loss
+    hess = jax.jacfwd(jax.grad(fn))(f_est.values[0])
+    if ignore_overflow_bins:
+        hess = hess[1:-1, 1:-1]
+
+    # create the Tikhonov regularization matrix
+    C0 = np.eye(hess.shape[0]) + np.diag(-np.ones(hess.shape[0]-1), k=1)
+    C1 = (C0.T @ C0)[1:-1]
+    C = C1.T @ C1
+
+    # compute the effective_number_of_degrees_of_freedom
+    D, U = np.linalg.eigh(hess)
+    D = np.diag(1 / np.sqrt(D)) # = D^{-1/2}
+    C1 = D @ U.T @ C @ U @ D
+    S, _ = np.linalg.eigh(C1)
+    n_df = np.sum(1 / (1 + S / tau))
+    return n_df
+
+
 def logarithmic_earth_movers_distance(f_true, f_est):
     """Compute the Earth Mover's Distance, a.k.a. Wasserstein L1 distance, between the logarithm of a true spectrum and the logarithm of its estimate. Ignore over- and underflow bins during the computation. Due to the logarithmic scaling, and due to be choice of distance, the resulting value well represents the "physicist's eye" in assessing similarity between spectra.
 
