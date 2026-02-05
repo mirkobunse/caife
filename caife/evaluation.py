@@ -4,7 +4,7 @@ import jax
 import numpy as np
 from .solvers import Result
 
-def global_correlation_coefficient(f_est, nll):
+def global_correlation_coefficient(f_est, nll, ignore_overflow_bins=True):
     """Compute the global correlation coefficient, as proposed by James: Statistical Methods in Experimental Physics (2006) and by Morik & Rhode: Discovery in Physics (2023). This coefficient should be minimal in unfolding because the true target bins should be independent, such that any correlations should be regarded as artifacts that stem from the reconstruction process.
 
     James (2006) defines the global correlation coefficient of a single parameter P as the maximum correlation between P and all possible linear combinations of all other parameters. Morik & Rhode (2023) apply this idea to unfolding by assessing the mean global correlation coefficient over all target bins. This assessment is implemented here.
@@ -12,6 +12,7 @@ def global_correlation_coefficient(f_est, nll):
     Args:
         f_est: The estimated spectrum, shape (n_target_bins,).
         nll: The negative log-likelihood function that `f_est` minimizes.
+        ignore_overflow_bins (optional): Whether to ignore the correlations with the two over- and underflow bins. Defaults to `True`.
 
     Returns:
         The value of the global correlation coefficient.
@@ -33,10 +34,12 @@ def global_correlation_coefficient(f_est, nll):
         1 - 1 / (np.diagonal(np.linalg.inv(hess)) * np.diagonal(hess)))
 
     # mean value, see Fig 10.9 and Eq. 10.39 in Morik & Rhode (2023)
+    if ignore_overflow_bins:
+        global_correlation_coefficients = global_correlation_coefficients[1:-1]
     return global_correlation_coefficients.mean()
 
 
-def pairwise_correlation_score(f_est, nll):
+def pairwise_correlation_score(f_est, nll, ignore_overflow_bins=True):
     """Compute the average pair-wise correlation.
 
     This alternative to the `global_correlation_coefficient` computes the correlation matrix from the covariance matrix and averages all off-diagonal entries. Hence, it computes the average pair-wise correlation between target bins instead of the average maximum correlation of each target bin with all linear combinations of the other bins.
@@ -44,6 +47,7 @@ def pairwise_correlation_score(f_est, nll):
     Args:
         f_est: The estimated spectrum, shape (n_target_bins,).
         nll: The negative log-likelihood function that `f_est` minimizes.
+        ignore_overflow_bins (optional): Whether to ignore the correlations with the two over- and underflow bins. Defaults to `True`.
 
     Returns:
         The value of the pair-wise correlation score.
@@ -62,6 +66,8 @@ def pairwise_correlation_score(f_est, nll):
     cov = np.linalg.inv(np.sqrt(.5) * hess)
     corr = cov / np.sqrt(np.diagonal(cov) * np.diagonal(cov).reshape(-1,1))
     corr = corr[:len(np.array(f_est)), :len(np.array(f_est))] # ignore nuisance parameters
+    if ignore_overflow_bins:
+        corr = corr[1:-1, 1:-1]
     return np.mean(np.abs(np.triu(corr, k=1))) # the sum of all off-diagonal entries
 
 

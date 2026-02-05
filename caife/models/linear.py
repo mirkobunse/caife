@@ -2,6 +2,7 @@
 
 import numpy as np
 import jax
+import time
 from . import AbstractModel
 from ..solvers.scipy import minimize
 from dataclasses import dataclass, field
@@ -174,12 +175,14 @@ class LinearSystematicsCountModel(LinearCountModel):
             if self.C is not None: # regularize
                 return loss + coeffs @ coeffs / (2 * self.C * len(X))
             return loss
+        t_init = time.time()
         self.opt_ = minimize(
             loss_fn,
             x0=jnp.zeros(coeffs_shape).reshape(-1), # initial guess: all zeros
             solver=self.solver,
             solver_options=self.solver_options,
         )
+        self.opt_.wallclock_time = time.time() - t_init
         self.coeffs_ = self.opt_.x.reshape(coeffs_shape) # optimized coefficients
 
     def A(self, s):
