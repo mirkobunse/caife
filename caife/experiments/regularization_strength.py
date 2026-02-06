@@ -78,6 +78,7 @@ def main(
     output_path,
     mc_path="~/data/caife/23111_final.pkl",
     obs_path="~/data/caife/2020.pkl",
+    tikhonov_scaling="none",
     seed=1491,
     is_test_run=False,
 ):
@@ -85,6 +86,8 @@ def main(
         "Starting a regularization_strength experiment",
         f"to produce {output_path} with seed {seed}",
     )
+    if tikhonov_scaling not in ["none", "observation", "training"]:
+        raise ValueError("Invalid value for tikhonov_scaling")
     if is_test_run:
         print("WARNING: this is a test run; results are not meaningful")
     if len(os.path.dirname(output_path)) > 0:  # ensure that the directory exists
@@ -150,14 +153,21 @@ def main(
         )
 
         # define a factory for negative log-likelihood functions
+        f_trn = model.target_view(y_trn, sample_weight=w_trn)  # the training spectrum
         def create_nll(model, X_tst, tau=0.0004):
             g_tst = model.proxy_view(X_tst)  # applies the binning to X
             def nll(f, s):
                 g_est = model(f, s)  # consider nuisance parameters s
                 value = caife.poisson_nll(g_est, g_tst)
                 if tau is not None:
+                    scaling_factors = None
+                    if tikhonov_scaling == "observation":
+                        scaling_factors = f[1:-1].max() / f[1:-1]
+                    elif tikhonov_scaling == "training":
+                        scaling_factors = f_trn[1:-1].max() / f_trn[1:-1]
                     reg = caife.tikhonov_regularization(
-                        jnp.log(f[1:-1] / A_EFF + 1e-10)
+                        jnp.log(f[1:-1] / A_EFF + 1e-10),
+                        scaling_factors=scaling_factors
                     )
                     value += reg / tau
                 return value
@@ -234,6 +244,12 @@ if __name__ == "__main__":
         help="path of an input *.pkl file with observed real data",
     )
     parser.add_argument(
+        "--tikhonov_scaling",
+        type=str,
+        default="none",
+        help="how to scale the Tikhonov matrix",
+    )
+    parser.add_argument(
         "--seed",
         type=int,
         default=1491,
@@ -246,6 +262,7 @@ if __name__ == "__main__":
         args.output_path,
         args.mc_path,
         args.obs_path,
+        args.tikhonov_scaling,
         args.seed,
         args.is_test_run,
     )
