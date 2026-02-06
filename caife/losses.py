@@ -3,6 +3,7 @@
 from jax import numpy as jnp
 from jax.typing import ArrayLike
 
+
 def poisson_nll(g_est: ArrayLike, g_true: ArrayLike):
     """Compute the (scaled) negative log-likelihood loss between `g_est` and `g_true`.
 
@@ -26,38 +27,32 @@ def poisson_nll(g_est: ArrayLike, g_true: ArrayLike):
     """
     loss = g_est - g_true * jnp.log(g_est + eps)
 
-    return loss.sum() # TODO need to evaluate whether .mean() should be used
+    return loss.sum()  # TODO need to evaluate whether .mean() should be used
 
-def tikhonov_regularization(f: ArrayLike):
+
+def tikhonov_regularization(f: ArrayLike, scaling_factors: ArrayLike | None = None):
     """Compute the Tikhonov regularization.
 
     Args:
-        f: A candidate solution to regularize.
+        f: A candidate solution or a matrix of candidate solutions to regularize, shape `(n_classes,)` or `(n_solutions, n_classes)`.
+        scaling_factors (optional): A vector of `(n_classes,)` factors that scale the rows of the Tikhonov matrix or `None` for unit scales. Defaults to `None`.
 
     Returns:
-        The (un-scaled) value of the Tikhonov regularization.
+        The value of the Tikhonov regularization with shape `(n_solutions,)` where `n_solutions=1` if `f.shape==(n_classes,)`.
     """
-
-    # implemented according to current example in lucas/caife.ipynb
-    # f can be of shape (n_classes,) or (n_samples, n_classes)
-    # if f is of shape (n_samples, n_classes) the loss will return 
-    # a result of shape (n_samples,) equivalent to:
-    # [tikhonov(f[0]), tikhonov(f[1]), ...]
     if f.ndim > 2:
-        raise ValueError("Invalid input! Must of dim <= 2")
+        raise ValueError("f.ndim must be <= 2")
 
-    C = len(f)
+    # create the (square root of the) Tikhonov matrix
+    n_classes = f.shape[-1]
+    T = (
+        jnp.diag(jnp.full(n_classes, 2))
+        + jnp.diag((jnp.full(n_classes - 1, -1)), -1)
+        + jnp.diag(jnp.full(n_classes - 1, -1), 1)
+    )[1:-1, :]
+    if scaling_factors is not None:
+        T *= scaling_factors[1:-1].reshape(-1, 1)
 
-    # f: (n_samples, n_classes)
-    if f.ndim == 2:
-        C = f.shape[1] 
-
-    # (n_classes-2, n_classes)
-    tik_mat = (
-        jnp.diag(jnp.full(C, 2)) + 
-        jnp.diag((jnp.full(C-1, -1)), -1) + 
-        jnp.diag(jnp.full(C-1, -1), 1)
-    )[1:C-1, :]
-
-    Tf = tik_mat @ f.T # (n_classes-2, n_samples)
-    return jnp.sum(Tf * Tf, axis=0) / 2 # (n_samples)
+    # compute the penalty
+    Tf = T @ f.T  # shape (n_classes-2, n_solutions)
+    return jnp.sum(Tf * Tf, axis=0) / 2  # shape (n_solutions,)
