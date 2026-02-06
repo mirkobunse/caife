@@ -121,6 +121,6 @@ def logarithmic_earth_movers_distance(f_true, f_est):
     Returns:
         The Earth Mover's Distance between the two spectra.
     """
-    return jnp.abs(jnp.cumsum( # Earth Mover's Distance in log space
-        np.log10(f_tst[1:-1]) - np.log10(f_est[1:-1])
+    return np.abs(np.cumsum( # Earth Mover's Distance in log space
+        np.log10(f_true[1:-1]) - np.log10(f_est[1:-1])
     )).sum()
