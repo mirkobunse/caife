@@ -28,7 +28,14 @@ def main(results_path, plot_path):
         results["emd"] = [map_bullshit_to_gold(v) for v in results["emd"]]
 
     # find the median tau to define some of the selection strategies
-    static_strategies = ["static_min_emd", "static_min_gcc", "static_min_pcs", "static_fixed"]
+    static_strategies = [
+        "static_min_emd",
+        "static_min_gcc",
+        "static_emd_gcc",
+        "static_min_pcs",
+        "static_emd_pcs",
+        "static_fixed",
+    ]
     taus = {k: [] for k in static_strategies}
     for _, group in results.groupby(["source", "target"]):
         taus["static_min_emd"].append(group[  # minimum EMD
@@ -39,6 +46,14 @@ def main(results_path, plot_path):
         ]["tau"].iloc[0])
         taus["static_min_pcs"].append(group[  # minimum pcs for tau <= 1e0
             group["pcs"] == group["pcs"][group["tau"]<=1].min()
+        ]["tau"].iloc[0])
+        emd_gcc = np.log(group["emd"]) * group["gcc"]
+        taus["static_emd_gcc"].append(group[  # minimum EMD*gcc
+            emd_gcc == emd_gcc.min()
+        ]["tau"].iloc[0])
+        emd_pcs = np.log(group["emd"]) * group["pcs"]
+        taus["static_emd_pcs"].append(group[  # minimum EMD*pcs
+            emd_pcs == emd_pcs.min()
         ]["tau"].iloc[0])
         taus["static_fixed"].append(1e-5)  # fixed to given value
     taus = {k: np.median(v) for k, v in taus.items()}
@@ -56,18 +71,10 @@ def main(results_path, plot_path):
         emds["min_pcs"].append(group[  # minimum pcs for tau <= 1e0
             group["pcs"] == group["pcs"][group["tau"]<=1].min()
         ]["emd"].iloc[0])
-        emds["static_min_emd"].append(group[  # static tau for minimum EMD
-            group["tau"] == taus["static_min_emd"]
-        ]["emd"].iloc[0])
-        emds["static_min_gcc"].append(group[  # static tau for minimum gcc
-            group["tau"] == taus["static_min_gcc"]
-        ]["emd"].iloc[0])
-        emds["static_min_pcs"].append(group[  # static tau for minimum pcs
-            group["tau"] == taus["static_min_pcs"]
-        ]["emd"].iloc[0])
-        emds["static_fixed"].append(group[  # fixed to given value
-            group["tau"] == taus["static_fixed"]
-        ]["emd"].iloc[0])
+        for s in static_strategies:
+            emds[s].append(group[  # static tau
+                group["tau"] == taus[s]
+            ]["emd"].iloc[0])
 
     # initialize the plot
     fig, ax = plt.subplots()
