@@ -38,6 +38,7 @@ from .evaluation import (
     pairwise_correlation_score,
     effective_number_of_degrees_of_freedom,
     logarithmic_earth_movers_distance,
+    gaussian_nll_score,
 )
 
 from .uncertainties import (
