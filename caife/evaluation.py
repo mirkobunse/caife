@@ -123,18 +123,25 @@ def logarithmic_earth_movers_distance(f_true, f_est):
     """
     return np.abs(np.cumsum( # Earth Mover's Distance in log space
         np.log10(f_true[1:-1]) - np.log10(f_est[1:-1])
-    )).sum()
+    )).sum().item()
 
 
-def gaussian_nll_score(f_true, f_est, uncertainties):
+def gaussian_nll_score(f_true, f_est, uncertainties, ignore_overflow_bins=True):
     """Compute the negative log-likelihood of some ground-truth under the Gaussian distributions that a solution represents.
 
     Args:
         f_true: The true spectrum, shape (n_target_bins,).
         f_est: The estimated spectrum, shape (n_target_bins,).
         uncertainties: The uncertainties of `f_est`, shape (n_target_bins,).
+        ignore_overflow_bins (optional): Whether to ignore the two over- and underflow bins. Defaults to `True`.
 
     Returns:
-        The negative log-likelihood of `f_true` under Gaussian distributions with means given by `f_est` and standard deviations given by `uncertainties`.
+        The negative log-likelihood of `np.ones(n_target_bins,)` under Gaussian distributions with means given by `f_est / f_true` and standard deviations given by `uncertainties / f_true`.
     """
-    return -np.sum(np.log(uncertainties) + ((f_est - f_true) / uncertainties)**2 / 2)
+    x = np.ones(len(f_true))
+    loc = f_est / f_true
+    scale = uncertainties / f_true
+    log_probs = np.log(scale) + ((x - loc) / scale)**2 / 2
+    if ignore_overflow_bins:
+        log_probs = log_probs[1:-1]
+    return np.sum(log_probs).item()

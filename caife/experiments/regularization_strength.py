@@ -192,9 +192,12 @@ def main(
                 f_tst = model.target_view(y_tst)  # the true solution
                 emd = np.abs(np.cumsum(  # Earth Mover's Distance in log space
                     np.log10(f_tst[1:-1]) - np.log10(f_est[1:-1])
-                )).sum(),
+                )).sum().item()
+                errors, _ = caife.uncertainty_from_hessian(f_est, nll)
+                gaussian_nll = caife.gaussian_nll_score(f_tst, f_est, errors)
             else:
                 emd = np.nan
+                gaussian_nll = np.nan
             results.append({  # store the results
                 "source": source,
                 "target": target,
@@ -205,6 +208,7 @@ def main(
                 "unreg_pcs": caife.pairwise_correlation_score(f_est, unreg_nll),
                 "ndf": caife.effective_number_of_degrees_of_freedom(f_est, unreg_nll, tau),
                 "emd": emd,
+                "gaussian_nll": gaussian_nll,
             })
 
         # compute ETA from the time spent in this transfer setting
