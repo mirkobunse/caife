@@ -5,7 +5,7 @@ import os
 import pandas as pd
 
 
-def main(results_path, plot_path, criterion="gcc"):
+def main(results_path, plot_path, criterion="gcc", error="gaussian_nll"):
     print(f"Plotting {plot_path} from {results_path}")
     if len(os.path.dirname(plot_path)) > 0:  # ensure that the directory exists
         os.makedirs(os.path.dirname(plot_path), exist_ok=True)
@@ -27,6 +27,12 @@ def main(results_path, plot_path, criterion="gcc"):
     results = pd.read_csv(results_path, index_col=0)
     sources = results["source"].unique()
     targets = results["target"].unique()
+
+    # normalize the gaussian_nll column to contain only values > 0
+    gaussian_nll_vals = np.unique(results["gaussian_nll"])
+    results["gaussian_nll"] += np.abs(gaussian_nll_vals[0]) + (
+        gaussian_nll_vals[1] - gaussian_nll_vals[0]
+    )
 
     # hack: parse nasty string representations
     if results["emd"].dtype != np.float64:
@@ -74,14 +80,16 @@ def main(results_path, plot_path, criterion="gcc"):
             if target != "real":
                 l2 = ax2.plot(
                     ax_results["tau"],
-                    ax_results["emd"],
+                    ax_results[error],
                     marker="",
                     color="C1",
-                    label="r: EMD",
+                    label="r: NLL" if error == "gaussian_nll" else "r: EMD",
                 )
-                # ax2.set_ylabel("EMD")
                 ax2.set_yscale("log")
-                ax2.set_ylim(bottom=5e-2, top=2e1)
+                if error == "gaussian_nll":
+                    ax2.set_ylim(bottom=5e-3, top=2e3)
+                else:
+                    ax2.set_ylim(bottom=5e-2, top=2e1)
             else:
                 l2 = ax2.plot(
                     ax_results["tau"],
@@ -126,11 +134,18 @@ if __name__ == "__main__":
         "--criterion",
         type=str,
         default="gcc",
-        help="correlation criterion to plot",
+        help="correlation criterion to plot (gcc or pcs)",
+    )
+    parser.add_argument(
+        "--error",
+        type=str,
+        default="gaussian_nll",
+        help="error measure to plot (emd or gaussian_nll)",
     )
     args = parser.parse_args()
     main(
         args.results_path,
         args.plot_path,
         args.criterion,
+        args.error,
     )
