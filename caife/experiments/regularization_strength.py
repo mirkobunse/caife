@@ -162,9 +162,9 @@ def main(
                 if tau is not None:
                     scaling_factors = None
                     if tikhonov_scaling == "observation":
-                        scaling_factors = f[1:-1].max() / f[1:-1]
+                        scaling_factors = f[1:-1].min() / f[1:-1]
                     elif tikhonov_scaling == "training":
-                        scaling_factors = f_trn[1:-1].max() / f_trn[1:-1]
+                        scaling_factors = f_trn[1:-1].min() / f_trn[1:-1]
                     reg = caife.tikhonov_regularization(
                         jnp.log(f[1:-1] / A_EFF + 1e-10),
                         scaling_factors=scaling_factors
