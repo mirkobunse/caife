@@ -151,14 +151,13 @@ class LinearSystematicsCountModel(LinearCountModel):
         )
         self.A_mask = jnp.einsum( # check where the full matrix is > 0
             "np,nt,n->pt", X, target_mask, sample_weight) > 0
-        if sample_weight is not None:
-            class_weight = jnp.sum( # normalize weights per class to unit sum
-                target_mask * sample_weight.reshape((-1, 1)),
-                axis=0,
-            )
-            sample_weight = sample_weight / class_weight[y]
-        else:
-            sample_weight = np.ones(len(y)) / representation.p_trn
+        if sample_weight is None:
+            sample_weight = np.ones(len(y))
+        class_weight = jnp.sum( # normalize weights per class to unit sum
+            target_mask * sample_weight.reshape((-1, 1)),
+            axis=0,
+        )
+        sample_weight = sample_weight / class_weight[y]
         def loss_fn(coeffs):
             loss = jnp.average(
                 softmax_cross_entropy(
@@ -191,3 +190,16 @@ class LinearSystematicsCountModel(LinearCountModel):
             axis=0, # for each target bin, apply softmax over all proxy bins
             where=self.A_mask,
         )
+
+
+def create_mixture_model(models):
+    """Combine a collection of models into a single model that returns a weighted average of the model-wise outputs.
+
+    Args:
+        models: The models to combine, each with the same callable interface `*args -> g_est`. In particular, `*args` needs to be identical across all models.
+
+    Returns:
+        A callable `(weights, *args) -> g_est` that serves as a single linear model. This model averages the outputs of the individual models with the given weights.
+    """
+    def mixture_model(weights, *args):
+        return jnp.average([m(*args) for m in models], weights=weights)
