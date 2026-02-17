@@ -190,16 +190,3 @@ class LinearSystematicsCountModel(LinearCountModel):
             axis=0, # for each target bin, apply softmax over all proxy bins
             where=self.A_mask,
         )
-
-
-def create_mixture_model(models):
-    """Combine a collection of models into a single model that returns a weighted average of the model-wise outputs.
-
-    Args:
-        models: The models to combine, each with the same callable interface `*args -> g_est`. In particular, `*args` needs to be identical across all models.
-
-    Returns:
-        A callable `(weights, *args) -> g_est` that serves as a single linear model. This model averages the outputs of the individual models with the given weights.
-    """
-    def mixture_model(weights, *args):
-        return jnp.average([m(*args) for m in models], weights=weights)

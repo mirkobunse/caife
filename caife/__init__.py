@@ -10,6 +10,11 @@ from .losses import (
     tikhonov_regularization,
 )
 
+from .models import (
+    AbstractModel,
+    create_mixture_model,
+)
+
 from .models.representations import (
     TreeBinning,
     UnivariateBinning,
@@ -17,7 +22,6 @@ from .models.representations import (
 )
 
 from .models.linear import (
-    AbstractModel,
     LinearCountModel,
     LinearSystematicsCountModel,
 )
