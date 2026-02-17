@@ -30,9 +30,11 @@ def main(results_path, plot_path, criterion="gcc", error="gaussian_nll"):
 
     # normalize the gaussian_nll column to contain only values > 0
     gaussian_nll_vals = np.unique(results["gaussian_nll"])
-    results["gaussian_nll"] += np.abs(gaussian_nll_vals[0]) + (
+    gaussian_nll_offset = np.abs(gaussian_nll_vals[0]) + (
         gaussian_nll_vals[1] - gaussian_nll_vals[0]
     )
+    results["gaussian_nll"] += gaussian_nll_offset
+    print(f"gaussian_nll_offset = {gaussian_nll_offset:.3e}")
 
     # hack: parse nasty string representations
     if results["emd"].dtype != np.float64:
@@ -87,7 +89,7 @@ def main(results_path, plot_path, criterion="gcc", error="gaussian_nll"):
                 )
                 ax2.set_yscale("log")
                 if error == "gaussian_nll":
-                    ax2.set_ylim(bottom=5e-3, top=2e3)
+                    ax2.set_ylim(bottom=1e0, top=2e3)
                 else:
                     ax2.set_ylim(bottom=5e-2, top=2e1)
             else:

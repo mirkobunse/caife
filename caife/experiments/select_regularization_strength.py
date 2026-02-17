@@ -106,7 +106,7 @@ def main(results_path, plot_path, error="gaussian_nll"):
     ax.set_ylabel("NLL" if error == "gaussian_nll" else "EMD")
     ax.set_yscale("log")
     if error == "gaussian_nll":
-        ax.set_ylim(bottom=1e-2, top=1e3)
+        ax.set_ylim(bottom=1e0, top=1e3)
     else:
         ax.set_ylim(bottom=3e-2, top=5e0)
 
