@@ -53,16 +53,16 @@ class AbstractModel(ABC):
         """Apply this model to a candidate spectrum.
 
         Args:
-            f: A candidate spectrum, shape `(n_target_bins,)`.
+            f: A candidate spectrum, shape `(n_bins_target,)`.
             s: A vector of systematic parameter values, shape `(n_systematic_parameters,)`. For some models, `s` is optional.
 
         Returns:
-            The predicted proxy distribution `g`, shape `(n_proxy_bins,)`, as modeled for `f`.
+            The predicted proxy distribution `g`, shape `(n_bins_proxy,)`, as modeled for `f`.
         """
         pass
 
 
-def create_mixture_model(models):
+def create_mixture_model_fn(models):
     """Combine a collection of models into a single model that returns a weighted average of the model-wise outputs.
 
     Args:
@@ -71,6 +71,7 @@ def create_mixture_model(models):
     Returns:
         A callable `(weights, *args) -> g_est` that serves as a single linear model. This model averages the outputs of the individual models with the given weights.
     """
-    def mixture_model(weights, *args):
-        return jnp.average([m(*args) for m in models], weights=weights)
-    return mixture_model
+    def mixture_model_fn(weights, *args):
+        g_est = jnp.stack([m(*args) for m in models]) # shape (n_models, n_bins_proxy)
+        return jnp.average(g_est, weights=weights, axis=0)
+    return mixture_model_fn

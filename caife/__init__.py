@@ -12,7 +12,7 @@ from .losses import (
 
 from .models import (
     AbstractModel,
-    create_mixture_model,
+    create_mixture_model_fn,
 )
 
 from .models.representations import (
