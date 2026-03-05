@@ -8,7 +8,12 @@ from qunfold.methods import class_prevalences, check_y
 
 @dataclass
 class TreeBinning(AbstractRepresentation):
-    """TODO: add documentation"""
+    """TODO: add documentation.
+
+    Args:
+        tree: A decision tree object that is in line with the API exposed by `sklearn.tree.DecisionTreeClassifier`.
+        fit_tree (optional): Whether to clone and fit the given `tree`. Defaults to `True`.
+    """
     tree: object
     fit_tree: bool = True
 
@@ -19,6 +24,7 @@ class TreeBinning(AbstractRepresentation):
 
         # fit the tree
         if self.fit_tree:
+            self.tree = self.tree.__sklearn_clone__()
             self.tree.fit(X, y, sample_weight=sample_weight)
 
         # create a mapping from arbitrary leaf IDs to nice, consecutive IDs
