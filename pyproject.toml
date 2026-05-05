@@ -9,7 +9,7 @@ dependencies = [
     "jax",
     "numpy",
     "optax",
-    "qunfold @ git+https://github.com/mirkobunse/qunfold>=0.1.5",
+    "qunfold @ git+https://github.com/mirkobunse/qunfold",
     "scipy",
 ]
 requires-python = ">= 3.8"
