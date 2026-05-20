@@ -190,3 +190,31 @@ class LinearSystematicsCountModel(LinearCountModel):
             axis=0, # for each target bin, apply softmax over all proxy bins
             where=self.A_mask,
         )
+
+class LinearMixtureCountModel(AbstractModel):
+    """Mixture of linear models that introduces the mixture of these models as a systematic parameter.
+
+    Args:
+        models: A list of LinearCountModels.
+    """
+    def __init__(self, models):
+        self.models = models
+        self.A_ = jnp.stack([m.A_ for m in models])
+        self.g_background_ = jnp.stack([m.g_background_ for m in models])
+
+    def fit(self, X, y, sample_weight=None, systematics=None, background=None):
+        return self # nothing to fit; assume that self.models are already fitted
+
+    def proxy_view(self, X, sample_weight=None):
+        return self.models[0].proxy_view(X, sample_weight=sample_weight)
+
+    def target_view(self, y, sample_weight=None):
+        return self.models[0].target_view(y, sample_weight=sample_weight)
+
+    def __call__(self, f, s):
+        g_background = jnp.average(self.g_background_, weights=s, axis=0)
+        g_pred = self.A(s) @ f + g_background
+        return g_pred
+
+    def A(self, s):
+        return jnp.average(self.A_, weights=s, axis=0)
