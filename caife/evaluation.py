@@ -2,82 +2,114 @@
 
 import jax
 import numpy as np
-from .solvers import Result
+from .solvers import create_split_fn
 
-def global_correlation_coefficient(f_est, nll, ignore_overflow_bins=True):
+def global_correlation_coefficient(result_components, nll, ignore_overflow_bins=True):
     """Compute the global correlation coefficient, as proposed by James: Statistical Methods in Experimental Physics (2006) and by Morik & Rhode: Discovery in Physics (2023). This coefficient should be minimal in unfolding because the true target bins should be independent, such that any correlations should be regarded as artifacts that stem from the reconstruction process.
 
     James (2006) defines the global correlation coefficient of a single parameter P as the maximum correlation between P and all possible linear combinations of all other parameters. Morik & Rhode (2023) apply this idea to unfolding by assessing the mean global correlation coefficient over all target bins. This assessment is implemented here.
 
     Args:
-        f_est: The estimated spectrum, shape (n_target_bins,).
-        nll: The negative log-likelihood function that `f_est` minimizes.
+        result_components: A tuple of result components or a single spectrum of shape (n_target_bins,).
+        nll: The negative log-likelihood function that `result_components` minimizes.
         ignore_overflow_bins (optional): Whether to ignore the correlations with the two over- and underflow bins. Defaults to `True`.
 
     Returns:
         The value of the global correlation coefficient.
     """
-    if not isinstance(f_est, Result):
-        raise ValueError("f_est must be of type caife.solvers.Result")
+    if not isinstance(result_components, (tuple, list)):
+        result_components = (result_components,) # ensure tuple
 
-    # compute the joint Hessian for the spectrum and nuisance parameters
-    if len(f_est.values) > 1:
-        fn = lambda vec: nll(*f_est.zip(vec)) # assume nll: (*vec) -> loss
-    else:
-        fn = nll # assume nll: f -> loss
-    hess = jax.jacfwd(jax.grad(fn))(f_est.zip()) # joint Hessian at result
+    # compute the joint Hessian across all result_components
+    split_fn = create_split_fn(result_components)
+    def vector_nll(vec): # assume nll: (*result_components) -> loss
+        return nll(*split_fn(vec))
+    hess = jax.jacfwd(jax.grad(vector_nll))(np.concatenate(result_components))
     hess = np.sqrt(.5) * hess # Minuit scales the Hessian of a likelihood
-    hess = hess[:len(np.array(f_est)), :len(np.array(f_est))] # ignore systematics
 
-    # bin-wise coefficients, see p. 28 in James (2006)
-    with np.errstate(invalid="ignore"):
+    # how to compute the GCC for each sub-Hessian, corresponding to one result component
+    def gcc_fn(hess_i, ignore_overflow_bins_i):
+        # bin-wise coefficients, see p. 28 in James (2006)
         global_correlation_coefficients = np.sqrt(
-            1 - 1 / (np.diagonal(np.linalg.inv(hess)) * np.diagonal(hess)))
+            1 - 1 / (np.diagonal(np.linalg.inv(hess_i)) * np.diagonal(hess_i)))
 
-    # mean value, see Fig 10.9 and Eq. 10.39 in Morik & Rhode (2023)
-    if ignore_overflow_bins:
-        global_correlation_coefficients = global_correlation_coefficients[1:-1]
-    return global_correlation_coefficients.mean()
+        # TODO overflow bin handling requires extra consideration
+        if ignore_overflow_bins:
+            global_correlation_coefficients = global_correlation_coefficients[1:-1]
+
+        # mean value, see Fig 10.9 and Eq. 10.39 in Morik & Rhode (2023)
+        return global_correlation_coefficients.mean()
+
+    # split the Hessian into result component-wise sub-Hessians and compute the GCCs
+    split_and_project_fn = create_split_fn(
+        result_components,
+        projections=gcc_fn,
+        two_dimensional=True,
+    )
+    with np.errstate(invalid="ignore"):
+        gccs = split_and_project_fn(hess)
+
+    # return the GCC for all result components
+    if len(gccs) == 1:
+        return gccs[0] # if no tuple is entered, no tuple should be returned
+    return gccs
 
 
-def pairwise_correlation_score(f_est, nll, ignore_overflow_bins=True):
+def pairwise_correlation_score(result_components, nll, ignore_overflow_bins=True):
     """Compute the average pair-wise correlation.
 
     This alternative to the `global_correlation_coefficient` computes the correlation matrix from the covariance matrix and averages all off-diagonal entries. Hence, it computes the average pair-wise correlation between target bins instead of the average maximum correlation of each target bin with all linear combinations of the other bins.
 
     Args:
-        f_est: The estimated spectrum, shape (n_target_bins,).
+        result_components: A tuple of result components or a single spectrum of shape (n_target_bins,).
         nll: The negative log-likelihood function that `f_est` minimizes.
         ignore_overflow_bins (optional): Whether to ignore the correlations with the two over- and underflow bins. Defaults to `True`.
 
     Returns:
         The value of the pair-wise correlation score.
     """
-    if not isinstance(f_est, Result):
-        raise ValueError("f_est must be of type caife.solvers.Result")
+    if not isinstance(result_components, (tuple, list)):
+        result_components = (result_components,) # ensure tuple
 
-    # compute the joint Hessian for the spectrum and nuisance parameters
-    if len(f_est.values) > 1:
-        fn = lambda vec: nll(*f_est.zip(vec)) # assume nll: (*vec) -> loss
-    else:
-        fn = nll # assume nll: f -> loss
-    hess = jax.jacfwd(jax.grad(fn))(f_est.zip()) # joint Hessian at result
+    # compute the joint Hessian across all result_components
+    split_fn = create_split_fn(result_components)
+    def vector_nll(vec): # assume nll: (*result_components) -> loss
+        return nll(*split_fn(vec))
+    hess = jax.jacfwd(jax.grad(vector_nll))(np.concatenate(result_components))
 
     # compute the covariance / error matrix, as in Minuit, and derive the correlation
     cov = np.linalg.inv(np.sqrt(.5) * hess)
     with np.errstate(invalid="ignore"):
         corr = cov / np.sqrt(np.diagonal(cov) * np.diagonal(cov).reshape(-1,1))
-    corr = corr[:len(np.array(f_est)), :len(np.array(f_est))] # ignore nuisance parameters
-    if ignore_overflow_bins:
-        corr = corr[1:-1, 1:-1]
-    return np.mean(np.abs(np.triu(corr, k=1))) # the sum of all off-diagonal entries
+
+    def pcc_fn(corr_i, ignore_overflow_bins_i):
+        # TODO overflow bin handling requires extra consideration
+        if ignore_overflow_bins:
+            corr_i = corr_i[1:-1]
+
+        # PCC = the sum of all off-diagonal entries
+        return np.mean(np.abs(np.triu(corr, k=1)))
+
+    # split the correlation matrix and compute the GCCs
+    split_and_project_fn = create_split_fn(
+        result_components,
+        projections=pcc_fn,
+        two_dimensional=True,
+    )
+    with np.errstate(invalid="ignore"):
+        pccs = split_and_project_fn(corr)
+
+    # return the PCC for all result components
+    if len(pccs) == 1:
+        return pccs[0] # if no tuple is entered, no tuple should be returned
+    return pccs
 
 
-def effective_number_of_degrees_of_freedom(f_est, unreg_nll, tau, ignore_overflow_bins=True):
+def effective_number_of_degrees_of_freedom(result_components, unreg_nll, tau, ignore_overflow_bins=True):
     """Compute the effective number of degrees of freedom, as of Blobel (1985, 2002).
 
     Args:
-        f_est: The estimated spectrum, shape (n_target_bins,).
+        result_components: A tuple of result components or a single spectrum of shape (n_target_bins,).
         unreg_nll: The un-regularized variant of the negative log-likelihood function that `f_est` minimizes.
         tau: The strength of the Tikhonov regularization.
         ignore_overflow_bins (optional): Whether to ignore the correlations with the two over- and underflow bins. Defaults to `True`.
@@ -85,15 +117,18 @@ def effective_number_of_degrees_of_freedom(f_est, unreg_nll, tau, ignore_overflo
     Returns:
         The effective number of degrees of freedom.
     """
-    if not isinstance(f_est, Result):
-        raise ValueError("f_est must be of type caife.solvers.Result")
+    if not isinstance(result_components, (tuple, list)):
+        result_components = (result_components,) # ensure tuple
+    elif len(result_components) != 2:
+        raise NotImplementedError(
+            "Only implemented for a single spectrum with optional systematics"
+        )
 
-    # compute the Hessian for the spectrum, ignoring any nuisance parameters
-    if len(f_est.values) > 1:
-        fn = lambda vec: unreg_nll(vec, f_est.values[1]) # assume nll: (f, s) -> loss
-    else:
-        fn = unreg_nll # assume nll: f -> loss
-    hess = jax.jacfwd(jax.grad(fn))(f_est.values[0])
+    # compute the joint Hessian across all result_components
+    split_fn = create_split_fn(result_components)
+    def vector_nll(vec): # assume unreg_nll: (f, s) -> loss
+        return unreg_nll(split_fn(vec)[0], result_components[1]) # fix s
+    hess = jax.jacfwd(jax.grad(vector_nll))(result_components[0])
     if ignore_overflow_bins:
         hess = hess[1:-1, 1:-1]
 

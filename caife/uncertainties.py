@@ -2,37 +2,29 @@
 
 import jax
 import numpy as np
-from .solvers import Result
-from jax import numpy as jnp
-from functools import partial
+from .solvers import create_split_fn
 
-def uncertainty_from_hessian(f_est, nll):
+def uncertainty_from_hessian(result_components, nll):
     """Estimate uncertainties in the style of Minuit.
 
     Args:
-        f_est: The estimated spectrum, shape (n_target_bins,).
-        nll: The negative log-likelihood function that `f_est` minimizes.
+        result_components: A tuple of result components or a single spectrum of shape (n_target_bins,).
+        nll: The negative log-likelihood function that `result_components` minimizes.
 
     Returns:
         A vector of bin-wise errors, shape (n_target_bins,).
     """
-    if not isinstance(f_est, Result):
-        raise ValueError("f_est must be of type caife.solvers.Result")
+    if not isinstance(result_components, (tuple, list)):
+        result_components = (result_components,) # ensure tuple
 
-    # compute the joint Hessian for the spectrum and nuisance parameters
-    if len(f_est.values) > 1:
-        fn = lambda vec: nll(*f_est.zip(vec)) # assume nll: (*vec) -> loss
-    else:
-        fn = nll # assume nll: f -> loss
-    hess = jax.jacfwd(jax.grad(fn))(f_est.zip()) # joint Hessian at result
+    # compute the joint Hessian across all result_components
+    split_fn = create_split_fn(result_components)
+    def vector_nll(vec): # assume nll: (*result_components) -> loss
+        return nll(*split_fn(vec))
+    hess = jax.jacfwd(jax.grad(vector_nll))(np.concatenate(result_components))
 
     # compute the bin-wise errors, just as Minuit does
-    errors = np.sqrt(np.diagonal(np.linalg.inv(np.sqrt(.5) * hess)))
-    if len(f_est.values) > 1:
-        target_dims = [ len(x) for x in f_est.values ]
-        boundaries = np.concatenate(([0], np.cumsum(target_dims)))
-        return (
-            errors[boundaries[i]:boundaries[i+1]]
-            for i in range(len(boundaries)-1)
-        )
+    errors = split_fn(np.sqrt(np.diagonal(np.linalg.inv(np.sqrt(.5) * hess))))
+    if len(errors) == 1:
+        return errors[0] # if no tuple is entered, no tuple should be returned
     return errors

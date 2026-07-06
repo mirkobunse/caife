@@ -4,7 +4,7 @@ import numpy as np
 import traceback
 from dataclasses import dataclass, field
 from scipy import optimize
-from . import AbstractSolver, Result
+from . import AbstractSolver
 
 
 """Factory function, without arguments, to create solver options."""

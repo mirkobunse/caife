@@ -7,49 +7,41 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from numpy.typing import ArrayLike
 
-@dataclass
-class Result:
-    """A result object containing the spectrum, nuisance parameter values, and auxiliary information. Behaves as if it was just the spectrum if cast to a numpy or JAX array.
 
-    Args:
-        values: Components of the solution, with `values[0]` being the target spectrum and `values[i] for i>0` optionally representing systematic parameter values.
-        aux (optional): A dict of auxiliary information on the result, e.g., how the result was obtained numerically. The contents of this dict differ between solvers.
-    """
-    values: list[ArrayLike]
-    aux: dict[str,object] | None = None
+def create_split_fn(result_components, projections=None, two_dimensional=False):
+    """TODO"""
+    boundaries = np.concatenate( # where to split result_vectors
+        ([0], np.cumsum([len(x) for x in result_components]))
+    )
 
-    def __array__(self, dtype=None, copy=None): # enable automatic casting to a numpy array
-        return np.array(self.values[0], dtype=dtype)
-
-    def __jax_array__(self): # enable automatic casting to a JAX array
-        return jnp.array(self.values[0])
-
-    def __getitem__(self, item): # allow slicing
-        return self.values[0].__getitem__(item)
-
-    def __str__(self): # logging sugar: a concise string representation
-        values = ", ".join([ str(v) for v in self.values ])
-        return f"{self.__class__.__name__}({values})"
-
-    def zip(self, *values):
-        """Concatenate solution components into a single vector or split a single vector into its components.
-
-        Args:
-            *values: The solution components or, if len(values)==1, a single concatenated solution vector. If len(values)==0, take the values of this result as an input.
-
-        Returns:
-            A tuple of solution components if len(values)==1 or else a single concatenated solution vector.
-        """
-        if len(values) == 1: # split a single vector into its components
-            target_dims = [ len(x) for x in self.values ]
-            boundaries = np.concatenate(([0], np.cumsum(target_dims)))
+    # default case: split a result_vector into components
+    if not two_dimensional:
+        def split_fn(result_vector):
             return (
-                values[0][boundaries[i]:boundaries[i+1]]
+                result_vector[boundaries[i]:boundaries[i+1]]
                 for i in range(len(boundaries)-1)
             )
-        elif len(values) == 0:
-            values = self.values
-        return jnp.concatenate(values) # concatenate components into a single vector
+
+    # two-dimensional case: split along two dimensions (useful for Hessians)
+    else:
+        def split_fn(result_matrix):
+            return (
+                result_matrix[
+                    boundaries[i]:boundaries[i+1],
+                    boundaries[i]:boundaries[i+1],
+                ]
+                for i in range(len(boundaries)-1)
+            )
+
+    # only apply projections if necessary
+    if projections is not None:
+        if not isinstance(projections, (tuple, list)):
+            projections = [projections for _ in result_components] # same function repeated
+        def split_and_project_fn(result_vector):
+            return (p(v) for p, v in zip(projections, split_fn(result_vector)))
+        return split_and_project_fn
+
+    return split_fn
 
 
 @dataclass
@@ -61,36 +53,37 @@ class AbstractSolver(ABC):
     """
     seed: int | None = None
 
-    def solve(self, nll, *latent_vectors):
+    def solve(self, nll, *latent_vectors, return_aux=False):
         """Solve the unfolding problem in the way it is represented by a negative log-likelihood and a sequence of latent vectors.
 
         Args:
             nll: The negative log-likelihood function that takes as many input arguments as there are latent vectors. Each input argument has to be a vector in its natural target space, e.g., a count spectrum or a systematic paramenter vector.
             *latent_vectors: The latent vectors, which describe, for all spectra and nuisance paramenters, the mapping between their latent and natural target spaces as well as the generation of their starting points in latent space.
+            return_aux (optional): Whether to return auxiliary information on the solution. This information could include, for instance, the number of iterations or the wall-clock time used for solving. Defaults to `False`.
 
         Returns:
-            A `caife.solvers.Result` to the unfolding problem.
+            A tuple of results with elements that correspond to the given `latent_vectors`. If `return_aux` is `True`, return a pair of this tuple and a `dict` of auxiliary information.
         """
         # create a random starting point for each latent variable
         rng = np.random.RandomState(self.seed)
-        starting_points = [ x.create_starting_point(rng) for x in latent_vectors ]
-
-        # determine where to split a concatenation of all latent variables
-        latent_dims = [ len(x) for x in starting_points ]
-        boundaries = np.concatenate(([0], np.cumsum(latent_dims)))
+        starting_points = [x.create_starting_point(rng) for x in latent_vectors]
 
         # split latents and project each latent to its target space
-        target_mapping_fn = lambda ell: [
-            latent_vectors[i](ell[boundaries[i]:boundaries[i+1]])
-            for i in range(len(boundaries)-1)
-        ]
+        split_and_project_fn = create_split_fn(
+            starting_points,
+            projections=latent_vectors,
+        )
 
         # solve the Fredholm equation through minimizing the latent objective
         ell, aux = self.solve_latent(
-            lambda ell: nll(*target_mapping_fn(ell)),
+            lambda ell: nll(*split_and_project_fn(ell)),
             jnp.concatenate(starting_points),
         )
-        return Result(target_mapping_fn(ell), aux) # map ell to the target spaces
+        result = tuple(split_and_project_fn(ell)) # cast to a tuple
+        if return_aux:
+            return result, aux
+        else:
+            return result
 
     @abstractmethod
     def solve_latent(self, latent_nll, x0):
@@ -101,7 +94,7 @@ class AbstractSolver(ABC):
             x0: The single combined starting point in latent space.
 
         Returns:
-            A pair of a single combined latent solution vector and an optional dict of auxiliary information on the result.
+            A pair `(ell, aux)` of a single combined latent solution vector `ell` and an auxiliary information object `aux`.
         """
         pass
 
@@ -150,7 +143,7 @@ class LatentSpectrum(AbstractLatentVector):
         return self.n_samples * p_est
 
     def create_starting_point(self, rng=None):
-        return rng.rand(self.n_bins_target-1) * 2 - 1
+        return jnp.array(rng.rand(self.n_bins_target-1) * 2 - 1)
 
 
 @dataclass
