@@ -49,7 +49,7 @@ class AbstractModel(ABC):
         pass
 
     @abstractmethod
-    def create_latent_vectors(self, X_obs):
+    def create_latents(self, X_obs):
         """Create a JAX pytree of latent vectors for this model.
 
         Args:
