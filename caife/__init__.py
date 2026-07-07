@@ -15,6 +15,12 @@ from .models import (
     create_mixture_model_fn,
 )
 
+from .models.latents import (
+    AbstractLatentVector,
+    LatentSpectrum,
+    LatentSystematics,
+)
+
 from .models.representations import (
     TreeBinning,
     UnivariateBinning,
@@ -28,9 +34,6 @@ from .models.linear import (
 
 from .solvers import (
     AbstractSolver,
-    AbstractLatentVector,
-    LatentSpectrum,
-    LatentSystematics,
 )
 
 from .solvers.scipy import (

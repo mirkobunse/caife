@@ -6,7 +6,7 @@ from unittest import TestCase
 
 
 @dataclass
-class _LatentVector(caife.solvers.AbstractLatentVector):
+class _LatentVector(caife.models.latents.AbstractLatentVector):
     starting_point: list
     def __call__(self, ell):
         return ell + 1
