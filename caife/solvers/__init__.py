@@ -8,44 +8,23 @@ from dataclasses import dataclass
 from numpy.typing import ArrayLike
 
 
-def create_split_fn(result_components, projections=None, two_dimensional=False):
+def flatten_result(tree):
     """TODO"""
-    if not isinstance(result_components, (tuple, list)):
-        result_components = (result_components,) # ensure tuple
-
-    # determine the splitting points for a result_vector
-    boundaries = np.concatenate(
-        ([0], np.cumsum([len(x) for x in result_components]))
+    leaves, treedef = jax.tree.flatten(tree)
+    boundaries = np.concatenate( # TODO generalize for multi-dimensional leaves
+        ([0], np.cumsum([len(x) for x in leaves]))
     )
+    return np.concatenate(leaves), (treedef, boundaries)
 
-    # default case: split a result_vector into components
-    if not two_dimensional:
-        def split_fn(result_vector):
-            return (
-                result_vector[boundaries[i]:boundaries[i+1]]
-                for i in range(len(boundaries)-1)
-            )
 
-    # two-dimensional case: split along two dimensions (useful for Hessians)
-    else:
-        def split_fn(result_matrix):
-            return (
-                result_matrix[
-                    boundaries[i]:boundaries[i+1],
-                    boundaries[i]:boundaries[i+1],
-                ]
-                for i in range(len(boundaries)-1)
-            )
-
-    # only apply projections if necessary
-    if projections is not None:
-        if not isinstance(projections, (tuple, list)):
-            projections = [projections for _ in result_components] # same function repeated
-        def split_and_project_fn(result_vector):
-            return (p(v) for p, v in zip(projections, split_fn(result_vector)))
-        return split_and_project_fn
-
-    return split_fn
+def unflatten_result(resultdef, leaves_vec):
+    """TODO"""
+    treedef, boundaries = resultdef
+    leaves = ( # split the single vector into its leaf components
+        leaves_vec[boundaries[i]:boundaries[i+1]]
+        for i in range(len(boundaries)-1)
+    )
+    return jax.tree.unflatten(treedef, leaves)
 
 
 @dataclass
@@ -57,12 +36,12 @@ class AbstractSolver(ABC):
     """
     seed: int | None = None
 
-    def solve(self, nll, *latent_vectors, return_aux=False):
+    def solve(self, nll, latent_vectors, return_aux=False):
         """Solve the unfolding problem in the way it is represented by a negative log-likelihood and a sequence of latent vectors.
 
         Args:
             nll: The negative log-likelihood function that takes as many input arguments as there are latent vectors. Each input argument has to be a vector in its natural target space, e.g., a count spectrum or a systematic paramenter vector.
-            *latent_vectors: The latent vectors, which describe, for all spectra and nuisance paramenters, the mapping between their latent and natural target spaces as well as the generation of their starting points in latent space.
+            latent_vectors: A JAX pytree of latent vectors, which describe, for all spectra and nuisance paramenters, the mapping between their latent and natural target spaces as well as the generation of their starting points in latent space.
             return_aux (optional): Whether to return auxiliary information on the solution. This information could include, for instance, the number of iterations or the wall-clock time used for solving. Defaults to `False`.
 
         Returns:
@@ -70,20 +49,25 @@ class AbstractSolver(ABC):
         """
         # create a random starting point for each latent variable
         rng = np.random.RandomState(self.seed)
-        starting_points = [x.create_starting_point(rng) for x in latent_vectors]
-
-        # split latents and project each latent to its target space
-        split_and_project_fn = create_split_fn(
-            starting_points,
-            projections=latent_vectors,
+        starting_points = jax.tree.map(
+            lambda x: x.create_starting_point(rng),
+            latent_vectors,
         )
+
+        # extract the PyTree structure
+        starting_vector, resultdef = flatten_result(starting_points)
 
         # solve the Fredholm equation through minimizing the latent objective
-        ell, aux = self.solve_latent(
-            lambda ell: nll(*split_and_project_fn(ell)),
-            jnp.concatenate(starting_points),
-        )
-        result = tuple(split_and_project_fn(ell)) # cast to a tuple
+        def latent_nll(ell):
+            ell = unflatten_result(resultdef, ell)
+            target_vectors = jax.tree.map( # map to latents to target spaces
+                lambda latent_vector, ell: latent_vector(ell),
+                latent_vectors,
+                ell,
+            )
+            return nll(target_vectors)
+        ell, aux = self.solve_latent(latent_nll, starting_vector)
+        result = unflatten_result(resultdef, ell)
         if return_aux:
             return result, aux
         else:

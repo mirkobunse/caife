@@ -38,8 +38,8 @@ from .solvers.scipy import (
 )
 
 from .evaluation import (
-    global_correlation_coefficient,
-    pairwise_correlation_score,
+    global_correlation_coefficients,
+    pairwise_correlation_scores,
     effective_number_of_degrees_of_freedom,
     logarithmic_earth_movers_distance,
     gaussian_nll_score,

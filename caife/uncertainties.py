@@ -2,29 +2,25 @@
 
 import jax
 import numpy as np
-from .solvers import create_split_fn
+from .solvers import flatten_result, unflatten_result
 
-def uncertainty_from_hessian(result_components, nll):
-    """Estimate uncertainties in the style of Minuit.
+def uncertainty_from_hessian(result, nll):
+    """Estimate statistical uncertainties in the style of Minuit.
 
     Args:
-        result_components: A tuple of result components or a single spectrum of shape (n_target_bins,).
-        nll: The negative log-likelihood function that `result_components` minimizes.
+        result: A JAX pytree of result components; could be a single spectrum of shape (n_target_bins,).
+        nll: The negative log-likelihood function that the `result` minimizes.
 
     Returns:
-        A vector of bin-wise errors, shape (n_target_bins,).
+        A JAX pytree of the pair-wise correlation scores corresponding to result components.
     """
-    if not isinstance(result_components, (tuple, list)):
-        result_components = (result_components,) # ensure tuple
+    result_vec, resultdef = flatten_result(result)
+    def vec_nll(result_vec): # assume nll: result -> loss
+        return nll(unflatten_result(resultdef, result_vec))
 
-    # compute the joint Hessian across all result_components
-    split_fn = create_split_fn(result_components)
-    def vector_nll(vec): # assume nll: (*result_components) -> loss
-        return nll(*split_fn(vec))
-    hess = jax.jacfwd(jax.grad(vector_nll))(np.concatenate(result_components))
+    # compute the joint Hessian across all result components
+    joint_hessian = jax.jacfwd(jax.grad(vec_nll))(result_vec)
 
     # compute the bin-wise errors, just as Minuit does
-    errors = split_fn(np.sqrt(np.diagonal(np.linalg.inv(np.sqrt(.5) * hess))))
-    if len(errors) == 1:
-        return errors[0] # if no tuple is entered, no tuple should be returned
-    return errors
+    errors = np.sqrt(np.diagonal(np.linalg.inv(np.sqrt(.5) * joint_hessian)))
+    return unflatten_result(resultdef, errors)
