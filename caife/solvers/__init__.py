@@ -10,7 +10,11 @@ from numpy.typing import ArrayLike
 
 def create_split_fn(result_components, projections=None, two_dimensional=False):
     """TODO"""
-    boundaries = np.concatenate( # where to split result_vectors
+    if not isinstance(result_components, (tuple, list)):
+        result_components = (result_components,) # ensure tuple
+
+    # determine the splitting points for a result_vector
+    boundaries = np.concatenate(
         ([0], np.cumsum([len(x) for x in result_components]))
     )
 
