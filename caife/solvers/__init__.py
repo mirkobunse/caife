@@ -67,7 +67,11 @@ class AbstractSolver(ABC):
             )
             return nll(target_vectors)
         ell, aux = self.solve_latent(latent_nll, starting_vector)
-        result = unflatten_result(resultdef, ell)
+        result = jax.tree.map( # map to latents to target spaces
+            lambda latent_vector, ell: latent_vector(ell),
+            latent_vectors,
+            unflatten_result(resultdef, ell),
+        )
         if return_aux:
             return result, aux
         else:
