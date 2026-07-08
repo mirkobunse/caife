@@ -71,15 +71,14 @@ class SystematicBinCollection(AbstractModel):
             systematics, self.systematic_bins_)
 
         # fit one model for each systematic bin
-        models = {}
+        self.models = {}
         for bin_key, is_in_bin in bin_indices.items():
-            models[bin_key] = self.base_model.clone().fit(
+            self.models[bin_key] = self.base_model.clone().fit(
                 X[is_in_bin],
                 y[is_in_bin],
                 sample_weight=None if sample_weight is None else sample_weight[is_in_bin],
                 background=background,
             )
-        self.models = MappingProxyType(models) # immutable dict
         return self
 
     def proxy_view(self, X, sample_weight=None):
