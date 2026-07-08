@@ -3,7 +3,6 @@ import itertools
 import jax
 from . import AbstractModel
 from dataclasses import dataclass, replace
-from types import MappingProxyType
 
 
 @dataclass
