@@ -6,7 +6,7 @@ import time
 from . import AbstractModel
 from .latents import LatentSpectrum, LatentSystematics
 from ..solvers.scipy import minimize
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from jax import numpy as jnp
 from optax.losses import softmax_cross_entropy
 from qunfold import AbstractRepresentation
@@ -75,8 +75,11 @@ class LinearCountModel(AbstractModel):
             raise ValueError("y contains nans or infs")
         return np.digitize(y, self.target_bins) - 1
 
-    def create_latents(self, X_obs): # create a single latent such that params = f
-        return LatentSpectrum(n_samples=len(X_obs), n_bins_target=self.n_bins_target)
+    def create_latents(self, X): # create a single latent such that params = f
+        return LatentSpectrum(n_samples=len(X), n_bins_target=self.n_bins_target)
+
+    def clone(self):
+        return replace(self)
 
     def __call__(self, params):
         g_pred = self.A_ @ params + self.g_background_
@@ -191,9 +194,9 @@ class LinearSystematicsCountModel(LinearCountModel):
             where=self.A_mask,
         )
 
-    def create_latents(self, X_obs):
+    def create_latents(self, X):
         return ( # create a tuple of latents such that params = (f, s)
-            LatentSpectrum(n_samples=len(X_obs), n_bins_target=self.n_bins_target),
+            LatentSpectrum(n_samples=len(X), n_bins_target=self.n_bins_target),
             LatentSystematics(bounds=self.systematic_bounds),
         )
 

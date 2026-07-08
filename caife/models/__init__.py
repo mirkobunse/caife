@@ -49,14 +49,23 @@ class AbstractModel(ABC):
         pass
 
     @abstractmethod
-    def create_latents(self, X_obs):
+    def create_latents(self, X):
         """Create a JAX pytree of latent vectors for this model.
 
         Args:
-            X_obs: The observations that are to be reconstructed.
+            X: The observations that are to be reconstructed.
 
         Returns:
             A JAX pytree of `AbstractLatentVector` instances with the same structure that calling this model requires for the `params` argument.
+        """
+        pass
+
+    @abstractmethod
+    def clone(self):
+        """Create a copy of this model.
+
+        Note:
+            It remains to be specified whether the copy should be deep or shallow and whether it should include or exclude fitted parameters.
         """
         pass
 

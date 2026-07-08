@@ -27,6 +27,11 @@ from .models.representations import (
     GridSearchRepresentation,
 )
 
+from .models.collections import (
+    SeparateSystematicBinCollection,
+    JointSystematicBinCollection,
+)
+
 from .models.linear import (
     LinearCountModel,
     LinearSystematicsCountModel,
