@@ -9,21 +9,23 @@ from dataclasses import dataclass
 
 def flatten_result(tree):
     """TODO"""
-    leaves, treedef = jax.tree.flatten(tree)
-    boundaries = np.concatenate( # TODO generalize for multi-dimensional leaves
+    shapes = jax.tree.map(lambda x: np.array(x.shape), tree)
+    leaves = jax.tree.leaves(jax.tree.map(lambda x: x.reshape(-1), tree))
+    boundaries = np.concatenate(
         ([0], np.cumsum([len(x) for x in leaves]))
     )
-    return np.concatenate(leaves), (treedef, boundaries)
+    return np.concatenate(leaves), (shapes, boundaries)
 
 
 def unflatten_result(resultdef, leaves_vec):
     """TODO"""
-    treedef, boundaries = resultdef
+    shapes, boundaries = resultdef
     leaves = ( # split the single vector into its leaf components
         leaves_vec[boundaries[i]:boundaries[i+1]]
         for i in range(len(boundaries)-1)
     )
-    return jax.tree.unflatten(treedef, leaves)
+    tree = jax.tree.unflatten(jax.tree.structure(shapes), leaves)
+    return jax.tree.map(lambda x, s: x.reshape(s), tree, shapes)
 
 
 @dataclass

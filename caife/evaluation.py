@@ -26,7 +26,7 @@ def global_correlation_coefficients(result, nll, ignore_overflow_bins=True):
     joint_hessian = np.sqrt(.5) * joint_hessian # apply Minuit's scaling
 
     # split the joint Hessian into component-wise sub-Hessians
-    treedef, boundaries = resultdef # extract boundaries
+    shapes, boundaries = resultdef # extract boundaries
     sub_hessians = (
         joint_hessian[
             boundaries[i]:boundaries[i+1],
@@ -34,7 +34,10 @@ def global_correlation_coefficients(result, nll, ignore_overflow_bins=True):
         ]
         for i in range(len(boundaries)-1)
     )
-    sub_hessians = jax.tree.unflatten(treedef, sub_hessians) # organize in a pytree
+    sub_hessians = jax.tree.unflatten( # organize in a pytree
+        jax.tree.structure(shapes),
+        sub_hessians,
+    )
 
     # compute the GCC for each sub-Hessian
     def gcc_fn(sub_hessian, ignore_overflow_bins):
@@ -49,7 +52,7 @@ def global_correlation_coefficients(result, nll, ignore_overflow_bins=True):
         return sub_gccs.mean()
     if isinstance(ignore_overflow_bins, bool):
         ignore_overflow_bins = jax.tree.unflatten( # repeat across tree structure
-            treedef,
+            jax.tree.structure(shapes),
             [ignore_overflow_bins for _ in range(len(boundaries)-1)],
         )
     with np.errstate(invalid="ignore"):
@@ -84,7 +87,7 @@ def pairwise_correlation_scores(result, nll, ignore_overflow_bins=True):
             np.diagonal(joint_cov) * np.diagonal(joint_cov).reshape(-1,1))
 
     # split the joint correlation matrix into component-wise sub-correlation matrices
-    treedef, boundaries = resultdef # extract boundaries
+    shapes, boundaries = resultdef # extract boundaries
     sub_corrs = (
         joint_corr[
             boundaries[i]:boundaries[i+1],
@@ -92,7 +95,10 @@ def pairwise_correlation_scores(result, nll, ignore_overflow_bins=True):
         ]
         for i in range(len(boundaries)-1)
     )
-    sub_corrs = jax.tree.unflatten(treedef, sub_corrs) # organize in a pytree
+    sub_corrs = jax.tree.unflatten( # organize in a pytree
+        jax.tree.structure(shapes),
+        sub_corrs,
+    )
 
     # compute the PCC for each sub-correlation matrix
     def pcs_fn(sub_corr, ignore_overflow_bins):
@@ -101,7 +107,7 @@ def pairwise_correlation_scores(result, nll, ignore_overflow_bins=True):
         return np.mean(np.abs(np.triu(joint_corr, k=1))) # average off-diagonal
     if isinstance(ignore_overflow_bins, bool):
         ignore_overflow_bins = jax.tree.unflatten( # repeat across tree structure
-            treedef,
+            jax.tree.structure(shapes),
             [ignore_overflow_bins for _ in range(len(boundaries)-1)],
         )
     with np.errstate(invalid="ignore"):
