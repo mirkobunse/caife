@@ -1,6 +1,7 @@
 import caife
 import numpy as np
 from caife.models.collections import SystematicBinCollection
+from copy import deepcopy
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.datasets import make_classification
 from unittest import TestCase
@@ -85,13 +86,20 @@ class TestTreeBinning(TestCase):
 
         background = np.random.randn(*X.shape)
 
-        # configure and fit a model with a TreeBinning
+        # configure a model with a TreeBinning
         max_n_bins_proxy = 5
         binning = caife.TreeBinning(
             tree=DecisionTreeClassifier(max_leaf_nodes=max_n_bins_proxy),
         )
         model = caife.LinearCountModel(target_bins, binning)
+        clone = deepcopy(model) # create a clone of the model
+
+        # fit and check for successful fitting
         model.fit(X, y, background=background)
+
+        # check that the tree of the clone is not fitted
+        with self.assertRaises(AttributeError):
+            clone.representation.tree.classes_ # should not exist
 
         # check that max_leaf_nodes is respected
         f_random = np.random.dirichlet(np.ones(len(target_bins)-1))

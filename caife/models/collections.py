@@ -2,6 +2,7 @@ import numpy as np
 import itertools
 import jax
 from . import AbstractModel
+from copy import deepcopy
 from dataclasses import dataclass, replace
 
 
@@ -72,7 +73,7 @@ class SystematicBinCollection(AbstractModel):
         # fit one model for each systematic bin
         self.models = {}
         for bin_key, is_in_bin in bin_indices.items():
-            self.models[bin_key] = self.base_model.clone().fit(
+            self.models[bin_key] = deepcopy(self.base_model).fit(
                 X[is_in_bin],
                 y[is_in_bin],
                 sample_weight=None if sample_weight is None else sample_weight[is_in_bin],
@@ -86,9 +87,6 @@ class SystematicBinCollection(AbstractModel):
     def target_view(self, y, sample_weight=None):
         return self.base_model.target_view(
             y, sample_weight) # assume that fitting is not necessary
-
-    def clone(self):
-        return replace(self)
 
 
 @dataclass

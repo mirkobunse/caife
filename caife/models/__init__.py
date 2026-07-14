@@ -61,15 +61,6 @@ class AbstractModel(ABC):
         pass
 
     @abstractmethod
-    def clone(self):
-        """Create a copy of this model.
-
-        Note:
-            It remains to be specified whether the copy should be deep or shallow and whether it should include or exclude fitted parameters.
-        """
-        pass
-
-    @abstractmethod
     def __call__(self, params):
         """Apply this model to a candidate spectrum.
 

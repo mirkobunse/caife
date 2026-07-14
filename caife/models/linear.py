@@ -78,11 +78,8 @@ class LinearCountModel(AbstractModel):
     def create_latents(self, X): # create a single latent such that params = f
         return LatentSpectrum(n_samples=len(X), n_bins_target=self.n_bins_target)
 
-    def clone(self):
-        return replace(self)
-
-    def __call__(self, params):
-        g_pred = self.A_ @ params + self.g_background_
+    def __call__(self, f): # f = params
+        g_pred = self.A_ @ f + self.g_background_
         return g_pred
 
     @property
