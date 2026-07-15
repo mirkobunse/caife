@@ -68,10 +68,13 @@ class SystematicBinCollection(AbstractModel):
         bin_indices = SystematicBinCollection.create_bin_indices(
             systematics, self.systematic_bins_)
 
-        # also partition the background
-        if background is not None:
-            if not isinstance(background, tuple) or len(background) != 3:
-                raise ValueError("background must be a tuple (X_bg, w_bg, S_bg)")
+        # also partition the background, if its systematics are given
+        n_background_samples = None
+        if isinstance(background, tuple):
+            n_background_samples = len(background[0])
+        elif background is not None:
+            n_background_samples = len(background) # assume background is an array X_bg
+        if isinstance(background, tuple) and len(background) == 3:
             X_bg, w_bg, S_bg = background # unpack the background tuple
             background_indices = SystematicBinCollection.create_bin_indices(
                 S_bg, self.systematic_bins_)
@@ -79,6 +82,8 @@ class SystematicBinCollection(AbstractModel):
                 lambda is_in_bin: (X_bg[is_in_bin], w_bg[is_in_bin]),
                 background_indices,
             )
+        else:
+            background = jax.tree.map(lambda _: background, bin_indices)
 
         # fit one model for each systematic bin
         self.models = {}
@@ -87,8 +92,10 @@ class SystematicBinCollection(AbstractModel):
                 X[is_in_bin],
                 y[is_in_bin],
                 sample_weight=None if sample_weight is None else sample_weight[is_in_bin],
-                background=None if background is None else background[bin_key],
+                background=background[bin_key],
             )
+            if n_background_samples is not None: # need to re-scale the background
+                self.models[bin_key].n_background_samples = n_background_samples
         return self
 
     def proxy_view(self, X, sample_weight=None):
