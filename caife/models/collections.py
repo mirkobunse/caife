@@ -23,8 +23,6 @@ class SystematicBinCollection(AbstractModel):
         Returns:
             A matrix with the bin boundaries for all systematic parameters, shape `(n_systematic_parameters, n_bins_per_systematic)`.
         """
-        if n_bins_per_systematic < 2:
-            raise ValueError("n_bins_per_systematic must be >= 2")
         systematic_bins = np.stack([
             np.linspace(s.min(), s.max(), n_bins_per_systematic+1) for s in systematics.T
         ])
@@ -70,6 +68,18 @@ class SystematicBinCollection(AbstractModel):
         bin_indices = SystematicBinCollection.create_bin_indices(
             systematics, self.systematic_bins_)
 
+        # also partition the background
+        if background is not None:
+            if not isinstance(background, tuple) or len(background) != 3:
+                raise ValueError("background must be a tuple (X_bg, w_bg, S_bg)")
+            X_bg, w_bg, S_bg = background # unpack the background tuple
+            background_indices = SystematicBinCollection.create_bin_indices(
+                S_bg, self.systematic_bins_)
+            background = jax.tree.map(
+                lambda is_in_bin: (X_bg[is_in_bin], w_bg[is_in_bin]),
+                background_indices,
+            )
+
         # fit one model for each systematic bin
         self.models = {}
         for bin_key, is_in_bin in bin_indices.items():
@@ -77,12 +87,15 @@ class SystematicBinCollection(AbstractModel):
                 X[is_in_bin],
                 y[is_in_bin],
                 sample_weight=None if sample_weight is None else sample_weight[is_in_bin],
-                background=background,
+                background=None if background is None else background[bin_key],
             )
         return self
 
     def proxy_view(self, X, sample_weight=None):
-        return jax.tree.map(lambda m: m.proxy_view(X), self.models)
+        return jax.tree.map(
+            lambda m: m.proxy_view(X, sample_weight=sample_weight),
+            self.models,
+        )
 
     def target_view(self, y, sample_weight=None):
         return self.base_model.target_view(
