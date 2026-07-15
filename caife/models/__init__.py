@@ -49,15 +49,26 @@ class AbstractModel(ABC):
         pass
 
     @abstractmethod
-    def __call__(self, f, s):
+    def create_latents(self, X):
+        """Create a JAX pytree of latent vectors for this model.
+
+        Args:
+            X: The observations that are to be reconstructed.
+
+        Returns:
+            A JAX pytree of `AbstractLatentVector` instances with the same structure that calling this model requires for the `params` argument.
+        """
+        pass
+
+    @abstractmethod
+    def __call__(self, params):
         """Apply this model to a candidate spectrum.
 
         Args:
-            f: A candidate spectrum, shape `(n_bins_target,)`.
-            s: A vector of systematic parameter values, shape `(n_systematic_parameters,)`. For some models, `s` is optional.
+            params: A JAX pytree of parameters for this model; could be a single candidate spectrum of shape `(n_bins_target,)` or a collection of such a spectrum and a vector of systematic parameter values of shape `(n_systematic_parameters,)`.
 
         Returns:
-            The predicted proxy distribution `g`, shape `(n_bins_proxy,)`, as modeled for `f`.
+            The predicted proxy distribution `g` of shape `(n_bins_proxy,)` that the model predicts for the given `params`.
         """
         pass
 

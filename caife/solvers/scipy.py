@@ -4,7 +4,7 @@ import numpy as np
 import traceback
 from dataclasses import dataclass, field
 from scipy import optimize
-from . import AbstractSolver, Result
+from . import AbstractSolver
 
 
 """Factory function, without arguments, to create solver options."""
@@ -54,10 +54,11 @@ def minimize(loss_fn, x0, solver="trust-ncg", solver_options=None):
     """
     if solver_options is None:
         solver_options = SOLVER_OPTIONS_FACTORY()
-    jac = jax.grad(loss_fn) # Jacobian
+    loss_fn = jax.jit(loss_fn)
+    jac = jax.jit(jax.grad(loss_fn)) # Jacobian
     hess = None
     if solver.lower() in _SECOND_ORDER_SOLVERS:
-        hess = jax.jacfwd(jac) # Hessian through forward-mode AD
+        hess = jax.jit(jax.jacfwd(jac)) # Hessian through forward-mode AD
 
     # error-robust optimization with a callback state
     state = _CallbackState(x0)

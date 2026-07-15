@@ -2,98 +2,138 @@
 
 import jax
 import numpy as np
-from .solvers import Result
+from .solvers import flatten_result, unflatten_result
 
-def global_correlation_coefficient(f_est, nll, ignore_overflow_bins=True):
+def global_correlation_coefficients(result, nll, ignore_overflow_bins=True):
     """Compute the global correlation coefficient, as proposed by James: Statistical Methods in Experimental Physics (2006) and by Morik & Rhode: Discovery in Physics (2023). This coefficient should be minimal in unfolding because the true target bins should be independent, such that any correlations should be regarded as artifacts that stem from the reconstruction process.
 
     James (2006) defines the global correlation coefficient of a single parameter P as the maximum correlation between P and all possible linear combinations of all other parameters. Morik & Rhode (2023) apply this idea to unfolding by assessing the mean global correlation coefficient over all target bins. This assessment is implemented here.
 
     Args:
-        f_est: The estimated spectrum, shape (n_target_bins,).
-        nll: The negative log-likelihood function that `f_est` minimizes.
-        ignore_overflow_bins (optional): Whether to ignore the correlations with the two over- and underflow bins. Defaults to `True`.
+        result: A JAX pytree of result components; could be a single spectrum of shape (n_target_bins,).
+        nll: The negative log-likelihood function that the `result` minimizes.
+        ignore_overflow_bins (optional): A JAX pytree specifying where to ignore the correlations with the two over- and underflow bins. Defaults to `True`.
 
     Returns:
-        The value of the global correlation coefficient.
+        A JAX pytree of the global correlation coefficients corresponding to result components.
     """
-    if not isinstance(f_est, Result):
-        raise ValueError("f_est must be of type caife.solvers.Result")
+    result_vec, resultdef = flatten_result(result)
+    def vec_nll(result_vec): # assume nll: result -> loss
+        return nll(unflatten_result(resultdef, result_vec))
 
-    # compute the joint Hessian for the spectrum and nuisance parameters
-    if len(f_est.values) > 1:
-        fn = lambda vec: nll(*f_est.zip(vec)) # assume nll: (*vec) -> loss
-    else:
-        fn = nll # assume nll: f -> loss
-    hess = jax.jacfwd(jax.grad(fn))(f_est.zip()) # joint Hessian at result
-    hess = np.sqrt(.5) * hess # Minuit scales the Hessian of a likelihood
-    hess = hess[:len(np.array(f_est)), :len(np.array(f_est))] # ignore systematics
+    # compute the joint Hessian across all result components
+    joint_hessian = jax.jacfwd(jax.grad(vec_nll))(result_vec)
+    joint_hessian = np.sqrt(.5) * joint_hessian # apply Minuit's scaling
 
-    # bin-wise coefficients, see p. 28 in James (2006)
+    # split the joint Hessian into component-wise sub-Hessians
+    shapes, boundaries = resultdef # extract boundaries
+    sub_hessians = (
+        joint_hessian[
+            boundaries[i]:boundaries[i+1],
+            boundaries[i]:boundaries[i+1],
+        ]
+        for i in range(len(boundaries)-1)
+    )
+    sub_hessians = jax.tree.unflatten( # organize in a pytree
+        jax.tree.structure(shapes),
+        sub_hessians,
+    )
+
+    # compute the GCC for each sub-Hessian
+    def gcc_fn(sub_hessian, ignore_overflow_bins):
+        # bin-wise coefficients, see p. 28 in James (2006)
+        sub_gccs = np.sqrt(
+            1 - 1 / (np.diagonal(np.linalg.inv(sub_hessian)) * np.diagonal(sub_hessian)))
+
+        if ignore_overflow_bins:
+            sub_gccs = sub_gccs[1:-1]
+
+        # mean value, see Fig 10.9 and Eq. 10.39 in Morik & Rhode (2023)
+        return sub_gccs.mean()
+    if isinstance(ignore_overflow_bins, bool):
+        ignore_overflow_bins = jax.tree.unflatten( # repeat across tree structure
+            jax.tree.structure(shapes),
+            [ignore_overflow_bins for _ in range(len(boundaries)-1)],
+        )
     with np.errstate(invalid="ignore"):
-        global_correlation_coefficients = np.sqrt(
-            1 - 1 / (np.diagonal(np.linalg.inv(hess)) * np.diagonal(hess)))
-
-    # mean value, see Fig 10.9 and Eq. 10.39 in Morik & Rhode (2023)
-    if ignore_overflow_bins:
-        global_correlation_coefficients = global_correlation_coefficients[1:-1]
-    return global_correlation_coefficients.mean()
+        gccs = jax.tree.map(gcc_fn, sub_hessians, ignore_overflow_bins)
+    return gccs
 
 
-def pairwise_correlation_score(f_est, nll, ignore_overflow_bins=True):
+def pairwise_correlation_scores(result, nll, ignore_overflow_bins=True):
     """Compute the average pair-wise correlation.
 
-    This alternative to the `global_correlation_coefficient` computes the correlation matrix from the covariance matrix and averages all off-diagonal entries. Hence, it computes the average pair-wise correlation between target bins instead of the average maximum correlation of each target bin with all linear combinations of the other bins.
+    This alternative to the `global_correlation_coefficients` computes the correlation matrix from the covariance matrix and averages all off-diagonal entries. Hence, it computes the average pair-wise correlation between target bins instead of the average maximum correlation of each target bin with all linear combinations of the other bins.
 
     Args:
-        f_est: The estimated spectrum, shape (n_target_bins,).
-        nll: The negative log-likelihood function that `f_est` minimizes.
-        ignore_overflow_bins (optional): Whether to ignore the correlations with the two over- and underflow bins. Defaults to `True`.
+        result: A JAX pytree of result components; could be a single spectrum of shape (n_target_bins,).
+        nll: The negative log-likelihood function that the `result` minimizes.
+        ignore_overflow_bins (optional): A JAX pytree specifying where to ignore the correlations with the two over- and underflow bins. Defaults to `True`.
 
     Returns:
-        The value of the pair-wise correlation score.
+        A JAX pytree of the pair-wise correlation scores corresponding to result components.
     """
-    if not isinstance(f_est, Result):
-        raise ValueError("f_est must be of type caife.solvers.Result")
+    result_vec, resultdef = flatten_result(result)
+    def vec_nll(result_vec): # assume nll: result -> loss
+        return nll(unflatten_result(resultdef, result_vec))
 
-    # compute the joint Hessian for the spectrum and nuisance parameters
-    if len(f_est.values) > 1:
-        fn = lambda vec: nll(*f_est.zip(vec)) # assume nll: (*vec) -> loss
-    else:
-        fn = nll # assume nll: f -> loss
-    hess = jax.jacfwd(jax.grad(fn))(f_est.zip()) # joint Hessian at result
+    # compute the joint Hessian across all result components
+    joint_hessian = jax.jacfwd(jax.grad(vec_nll))(result_vec)
 
     # compute the covariance / error matrix, as in Minuit, and derive the correlation
-    cov = np.linalg.inv(np.sqrt(.5) * hess)
+    joint_cov = np.linalg.inv(np.sqrt(.5) * joint_hessian)
     with np.errstate(invalid="ignore"):
-        corr = cov / np.sqrt(np.diagonal(cov) * np.diagonal(cov).reshape(-1,1))
-    corr = corr[:len(np.array(f_est)), :len(np.array(f_est))] # ignore nuisance parameters
-    if ignore_overflow_bins:
-        corr = corr[1:-1, 1:-1]
-    return np.mean(np.abs(np.triu(corr, k=1))) # the sum of all off-diagonal entries
+        joint_corr = joint_cov / np.sqrt(
+            np.diagonal(joint_cov) * np.diagonal(joint_cov).reshape(-1,1))
+
+    # split the joint correlation matrix into component-wise sub-correlation matrices
+    shapes, boundaries = resultdef # extract boundaries
+    sub_corrs = (
+        joint_corr[
+            boundaries[i]:boundaries[i+1],
+            boundaries[i]:boundaries[i+1],
+        ]
+        for i in range(len(boundaries)-1)
+    )
+    sub_corrs = jax.tree.unflatten( # organize in a pytree
+        jax.tree.structure(shapes),
+        sub_corrs,
+    )
+
+    # compute the PCC for each sub-correlation matrix
+    def pcs_fn(sub_corr, ignore_overflow_bins):
+        if ignore_overflow_bins:
+            sub_corr = sub_corr[1:-1]
+        return np.mean(np.abs(np.triu(joint_corr, k=1))) # average off-diagonal
+    if isinstance(ignore_overflow_bins, bool):
+        ignore_overflow_bins = jax.tree.unflatten( # repeat across tree structure
+            jax.tree.structure(shapes),
+            [ignore_overflow_bins for _ in range(len(boundaries)-1)],
+        )
+    with np.errstate(invalid="ignore"):
+        pcss = jax.tree.map(pcs_fn, sub_corrs, ignore_overflow_bins)
+    return pcss
 
 
-def effective_number_of_degrees_of_freedom(f_est, unreg_nll, tau, ignore_overflow_bins=True):
+def effective_number_of_degrees_of_freedom(result, unreg_nll, tau, ignore_overflow_bins=True):
     """Compute the effective number of degrees of freedom, as of Blobel (1985, 2002).
 
     Args:
-        f_est: The estimated spectrum, shape (n_target_bins,).
-        unreg_nll: The un-regularized variant of the negative log-likelihood function that `f_est` minimizes.
+        result: A single spectrum of shape (n_target_bins,).
+        unreg_nll: The un-regularized variant of the negative log-likelihood function that the `result` minimizes.
         tau: The strength of the Tikhonov regularization.
         ignore_overflow_bins (optional): Whether to ignore the correlations with the two over- and underflow bins. Defaults to `True`.
 
     Returns:
         The effective number of degrees of freedom.
     """
-    if not isinstance(f_est, Result):
-        raise ValueError("f_est must be of type caife.solvers.Result")
+    if jax.tree.structure(result) != jax.tree.structure(0):
+        raise NotImplementedError(
+            "Only implemented for a single spectrum, not for pytrees"
+        )
 
-    # compute the Hessian for the spectrum, ignoring any nuisance parameters
-    if len(f_est.values) > 1:
-        fn = lambda vec: unreg_nll(vec, f_est.values[1]) # assume nll: (f, s) -> loss
-    else:
-        fn = unreg_nll # assume nll: f -> loss
-    hess = jax.jacfwd(jax.grad(fn))(f_est.values[0])
+    # compute the Hessian
+    hess = jax.jacfwd(jax.grad(unreg_nll))(result)
     if ignore_overflow_bins:
         hess = hess[1:-1, 1:-1]
 

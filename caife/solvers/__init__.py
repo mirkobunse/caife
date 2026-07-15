@@ -5,51 +5,27 @@ import jax.numpy as jnp
 import numpy as np
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from numpy.typing import ArrayLike
 
-@dataclass
-class Result:
-    """A result object containing the spectrum, nuisance parameter values, and auxiliary information. Behaves as if it was just the spectrum if cast to a numpy or JAX array.
 
-    Args:
-        values: Components of the solution, with `values[0]` being the target spectrum and `values[i] for i>0` optionally representing systematic parameter values.
-        aux (optional): A dict of auxiliary information on the result, e.g., how the result was obtained numerically. The contents of this dict differ between solvers.
-    """
-    values: list[ArrayLike]
-    aux: dict[str,object] | None = None
+def flatten_result(tree):
+    """TODO"""
+    shapes = jax.tree.map(lambda x: np.array(x.shape), tree)
+    leaves = jax.tree.leaves(jax.tree.map(lambda x: x.reshape(-1), tree))
+    boundaries = np.concatenate(
+        ([0], np.cumsum([len(x) for x in leaves]))
+    )
+    return np.concatenate(leaves), (shapes, boundaries)
 
-    def __array__(self, dtype=None, copy=None): # enable automatic casting to a numpy array
-        return np.array(self.values[0], dtype=dtype)
 
-    def __jax_array__(self): # enable automatic casting to a JAX array
-        return jnp.array(self.values[0])
-
-    def __getitem__(self, item): # allow slicing
-        return self.values[0].__getitem__(item)
-
-    def __str__(self): # logging sugar: a concise string representation
-        values = ", ".join([ str(v) for v in self.values ])
-        return f"{self.__class__.__name__}({values})"
-
-    def zip(self, *values):
-        """Concatenate solution components into a single vector or split a single vector into its components.
-
-        Args:
-            *values: The solution components or, if len(values)==1, a single concatenated solution vector. If len(values)==0, take the values of this result as an input.
-
-        Returns:
-            A tuple of solution components if len(values)==1 or else a single concatenated solution vector.
-        """
-        if len(values) == 1: # split a single vector into its components
-            target_dims = [ len(x) for x in self.values ]
-            boundaries = np.concatenate(([0], np.cumsum(target_dims)))
-            return (
-                values[0][boundaries[i]:boundaries[i+1]]
-                for i in range(len(boundaries)-1)
-            )
-        elif len(values) == 0:
-            values = self.values
-        return jnp.concatenate(values) # concatenate components into a single vector
+def unflatten_result(resultdef, leaves_vec):
+    """TODO"""
+    shapes, boundaries = resultdef
+    leaves = ( # split the single vector into its leaf components
+        leaves_vec[boundaries[i]:boundaries[i+1]]
+        for i in range(len(boundaries)-1)
+    )
+    tree = jax.tree.unflatten(jax.tree.structure(shapes), leaves)
+    return jax.tree.map(lambda x, s: x.reshape(s), tree, shapes)
 
 
 @dataclass
@@ -61,36 +37,46 @@ class AbstractSolver(ABC):
     """
     seed: int | None = None
 
-    def solve(self, nll, *latent_vectors):
+    def solve(self, nll, latent_vectors, return_aux=False):
         """Solve the unfolding problem in the way it is represented by a negative log-likelihood and a sequence of latent vectors.
 
         Args:
             nll: The negative log-likelihood function that takes as many input arguments as there are latent vectors. Each input argument has to be a vector in its natural target space, e.g., a count spectrum or a systematic paramenter vector.
-            *latent_vectors: The latent vectors, which describe, for all spectra and nuisance paramenters, the mapping between their latent and natural target spaces as well as the generation of their starting points in latent space.
+            latent_vectors: A JAX pytree of latent vectors, which describe, for all spectra and nuisance paramenters, the mapping between their latent and natural target spaces as well as the generation of their starting points in latent space.
+            return_aux (optional): Whether to return auxiliary information on the solution. This information could include, for instance, the number of iterations or the wall-clock time used for solving. Defaults to `False`.
 
         Returns:
-            A `caife.solvers.Result` to the unfolding problem.
+            A tuple of results with elements that correspond to the given `latent_vectors`. If `return_aux` is `True`, return a pair of this tuple and a `dict` of auxiliary information.
         """
         # create a random starting point for each latent variable
         rng = np.random.RandomState(self.seed)
-        starting_points = [ x.create_starting_point(rng) for x in latent_vectors ]
+        starting_points = jax.tree.map(
+            lambda x: x.create_starting_point(rng),
+            latent_vectors,
+        )
 
-        # determine where to split a concatenation of all latent variables
-        latent_dims = [ len(x) for x in starting_points ]
-        boundaries = np.concatenate(([0], np.cumsum(latent_dims)))
-
-        # split latents and project each latent to its target space
-        target_mapping_fn = lambda ell: [
-            latent_vectors[i](ell[boundaries[i]:boundaries[i+1]])
-            for i in range(len(boundaries)-1)
-        ]
+        # extract the PyTree structure
+        starting_vector, resultdef = flatten_result(starting_points)
 
         # solve the Fredholm equation through minimizing the latent objective
-        ell, aux = self.solve_latent(
-            lambda ell: nll(*target_mapping_fn(ell)),
-            jnp.concatenate(starting_points),
+        def latent_nll(ell):
+            ell = unflatten_result(resultdef, ell)
+            target_vectors = jax.tree.map( # map to latents to target spaces
+                lambda latent_vector, ell: latent_vector(ell),
+                latent_vectors,
+                ell,
+            )
+            return nll(target_vectors)
+        ell, aux = self.solve_latent(latent_nll, starting_vector)
+        result = jax.tree.map( # map to latents to target spaces
+            lambda latent_vector, ell: latent_vector(ell),
+            latent_vectors,
+            unflatten_result(resultdef, ell),
         )
-        return Result(target_mapping_fn(ell), aux) # map ell to the target spaces
+        if return_aux:
+            return result, aux
+        else:
+            return result
 
     @abstractmethod
     def solve_latent(self, latent_nll, x0):
@@ -101,69 +87,6 @@ class AbstractSolver(ABC):
             x0: The single combined starting point in latent space.
 
         Returns:
-            A pair of a single combined latent solution vector and an optional dict of auxiliary information on the result.
+            A pair `(ell, aux)` of a single combined latent solution vector `ell` and an auxiliary information object `aux`.
         """
         pass
-
-
-class AbstractLatentVector(ABC):
-    """Abstract base class for the latent variables over which caife solvers minimize negative log-likelihoods."""
-
-    @abstractmethod
-    def __call__(self, ell):
-        """Transform a latent variable to the target space.
-
-        Args:
-            ell: The vector-valued latent variable, shape (latent_dim,).
-
-        Returns:
-            A vector in the target space, shape (target_dim,).
-        """
-        pass
-
-    @abstractmethod
-    def create_starting_point(self, rng=None):
-        """Create a random starting point in latent space.
-
-        Args:
-            rng (optional): Random number generator.
-
-        Returns:
-            An initial vector in the latent space, shape (latent_dim,)."""
-        pass
-
-
-@dataclass
-class LatentSpectrum(AbstractLatentVector):
-    """Transforms a vector of latent variables through the "soft-max trick" by Bunse (2022) and scales it by the given number of samples. Through this design choice, the output will always be a valid count spectrum with all bin-wise counts larger than zero and the sum of all bin counts equal to the given number of samples.
-
-    Args:
-        n_samples: The desired number of samples.
-        n_bins_target: The number of target bins.
-    """
-    n_samples: int
-    n_bins_target: int
-
-    def __call__(self, ell):
-        exp_ell = jnp.exp(ell)
-        p_est = jnp.concatenate((jnp.ones(1), exp_ell)) / (1. + exp_ell.sum())
-        return self.n_samples * p_est
-
-    def create_starting_point(self, rng=None):
-        return rng.rand(self.n_bins_target-1) * 2 - 1
-
-
-@dataclass
-class LatentSystematics(AbstractLatentVector):
-    """Transforms a latent variable through a sigmoid that is scaled to match the given bounds. Through this design choice, the value of the systematic parameter will always be within the given bounds.
-
-    Args:
-        bounds: The minimum and maximum value for each systematic parameter, shape (n_systematic_parameters, 2).
-    """
-    bounds: ArrayLike
-
-    def __call__(self, ell):
-        return self.bounds[:,0] + (self.bounds[:,1] - self.bounds[:,0]) * jax.nn.sigmoid(ell)
-
-    def create_starting_point(self, rng=None):
-        return jnp.zeros(self.bounds.shape[0])

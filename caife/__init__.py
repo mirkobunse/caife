@@ -1,4 +1,4 @@
-__version__ = "0.0.2"
+__version__ = "0.0.3"
 
 # necessary for successful scipy.minimize
 from jax import config
@@ -15,10 +15,21 @@ from .models import (
     create_mixture_model_fn,
 )
 
+from .models.latents import (
+    AbstractLatentVector,
+    LatentSpectrum,
+    LatentSystematics,
+)
+
 from .models.representations import (
     TreeBinning,
     UnivariateBinning,
     GridSearchRepresentation,
+)
+
+from .models.collections import (
+    SeparateSystematicBinCollection,
+    JointSystematicBinCollection,
 )
 
 from .models.linear import (
@@ -28,9 +39,6 @@ from .models.linear import (
 
 from .solvers import (
     AbstractSolver,
-    AbstractLatentVector,
-    LatentSpectrum,
-    LatentSystematics,
 )
 
 from .solvers.scipy import (
@@ -38,8 +46,8 @@ from .solvers.scipy import (
 )
 
 from .evaluation import (
-    global_correlation_coefficient,
-    pairwise_correlation_score,
+    global_correlation_coefficients,
+    pairwise_correlation_scores,
     effective_number_of_degrees_of_freedom,
     logarithmic_earth_movers_distance,
     gaussian_nll_score,

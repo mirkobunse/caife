@@ -2,37 +2,25 @@
 
 import jax
 import numpy as np
-from .solvers import Result
-from jax import numpy as jnp
-from functools import partial
+from .solvers import flatten_result, unflatten_result
 
-def uncertainty_from_hessian(f_est, nll):
-    """Estimate uncertainties in the style of Minuit.
+def uncertainty_from_hessian(result, nll):
+    """Estimate statistical uncertainties in the style of Minuit.
 
     Args:
-        f_est: The estimated spectrum, shape (n_target_bins,).
-        nll: The negative log-likelihood function that `f_est` minimizes.
+        result: A JAX pytree of result components; could be a single spectrum of shape (n_target_bins,).
+        nll: The negative log-likelihood function that the `result` minimizes.
 
     Returns:
-        A vector of bin-wise errors, shape (n_target_bins,).
+        A JAX pytree of the pair-wise correlation scores corresponding to result components.
     """
-    if not isinstance(f_est, Result):
-        raise ValueError("f_est must be of type caife.solvers.Result")
+    result_vec, resultdef = flatten_result(result)
+    def vec_nll(result_vec): # assume nll: result -> loss
+        return nll(unflatten_result(resultdef, result_vec))
 
-    # compute the joint Hessian for the spectrum and nuisance parameters
-    if len(f_est.values) > 1:
-        fn = lambda vec: nll(*f_est.zip(vec)) # assume nll: (*vec) -> loss
-    else:
-        fn = nll # assume nll: f -> loss
-    hess = jax.jacfwd(jax.grad(fn))(f_est.zip()) # joint Hessian at result
+    # compute the joint Hessian across all result components
+    joint_hessian = jax.jacfwd(jax.grad(vec_nll))(result_vec)
 
     # compute the bin-wise errors, just as Minuit does
-    errors = np.sqrt(np.diagonal(np.linalg.inv(np.sqrt(.5) * hess)))
-    if len(f_est.values) > 1:
-        target_dims = [ len(x) for x in f_est.values ]
-        boundaries = np.concatenate(([0], np.cumsum(target_dims)))
-        return (
-            errors[boundaries[i]:boundaries[i+1]]
-            for i in range(len(boundaries)-1)
-        )
-    return errors
+    errors = np.sqrt(np.diagonal(np.linalg.inv(np.sqrt(.5) * joint_hessian)))
+    return unflatten_result(resultdef, errors)

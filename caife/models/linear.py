@@ -4,8 +4,9 @@ import numpy as np
 import jax
 import time
 from . import AbstractModel
+from .latents import LatentSpectrum, LatentSystematics
 from ..solvers.scipy import minimize
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from jax import numpy as jnp
 from optax.losses import softmax_cross_entropy
 from qunfold import AbstractRepresentation
@@ -56,10 +57,6 @@ class LinearCountModel(AbstractModel):
         )
         self.A_ = jnp.array(A) # cast A to a JAX array to make __call__ differentiable
 
-    def A(self, s=None):
-        """Estimate the transfer matrix `A` for some systematics vector `s`."""
-        return self.A_ # constant if no systematics are modeled
-
     def proxy_view(self, X, sample_weight=None):
         g = self.representation.transform(X, sample_weight=sample_weight)
         return g * len(X) # scale to counts; assume g is scaled to a unit sum
@@ -78,8 +75,11 @@ class LinearCountModel(AbstractModel):
             raise ValueError("y contains nans or infs")
         return np.digitize(y, self.target_bins) - 1
 
-    def __call__(self, f, s=None):
-        g_pred = self.A(s) @ f + self.g_background_
+    def create_latents(self, X): # create a single latent such that params = f
+        return LatentSpectrum(n_samples=len(X), n_bins_target=self.n_bins_target)
+
+    def __call__(self, f): # f = params
+        g_pred = self.A_ @ f + self.g_background_
         return g_pred
 
     @property
@@ -190,6 +190,17 @@ class LinearSystematicsCountModel(LinearCountModel):
             axis=0, # for each target bin, apply softmax over all proxy bins
             where=self.A_mask,
         )
+
+    def create_latents(self, X):
+        return ( # create a tuple of latents such that params = (f, s)
+            LatentSpectrum(n_samples=len(X), n_bins_target=self.n_bins_target),
+            LatentSystematics(bounds=self.systematic_bounds),
+        )
+
+    def __call__(self, params):
+        f, s = params
+        g_pred = self.A(s) @ f + self.g_background_
+        return g_pred
 
 class LinearMixtureCountModel(AbstractModel):
     """Mixture of linear models that introduces the mixture of these models as a systematic parameter.

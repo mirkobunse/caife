@@ -1,5 +1,7 @@
 import caife
 import numpy as np
+from caife.models.collections import SystematicBinCollection
+from copy import deepcopy
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.datasets import make_classification
 from unittest import TestCase
@@ -52,18 +54,31 @@ class TestLinearCountModel(TestCase):
 
 class TestTreeBinning(TestCase):
     def test_dev(self):
-        X, y = make_classification(n_samples=1_000, n_features=10, n_informative=7, n_classes=4)
+        X, y = make_classification(
+            n_samples=1_000,
+            n_features=10,
+            n_informative=7,
+            n_classes=4,
+            random_state=1491,
+        )
         max_n_bins_proxy = 5
         binning = caife.TreeBinning(
             tree=DecisionTreeClassifier(max_leaf_nodes=max_n_bins_proxy),
         )
 
+        # only test that no errors occur
         A = binning.fit_transform(X, y, average=False)
         X_tree = binning.transform(X, average=False)
         self.assertFalse(False)
     
     def test_with_linear_model(self):
-        X, y = make_classification(n_samples=1_000, n_features=10, n_informative=7, n_classes=4)
+        X, y = make_classification(
+            n_samples=1_000,
+            n_features=10,
+            n_informative=7,
+            n_classes=4,
+            random_state=1491,
+        )
 
         target_bins = np.arange(5, dtype=float) # n_classes+1 bin boundaries required
         target_bins[0] = -np.inf # bins have to range from -inf to inf
@@ -71,13 +86,20 @@ class TestTreeBinning(TestCase):
 
         background = np.random.randn(*X.shape)
 
-        # configure and fit a model with a TreeBinning
+        # configure a model with a TreeBinning
         max_n_bins_proxy = 5
         binning = caife.TreeBinning(
             tree=DecisionTreeClassifier(max_leaf_nodes=max_n_bins_proxy),
         )
         model = caife.LinearCountModel(target_bins, binning)
+        clone = deepcopy(model) # create a clone of the model
+
+        # fit and check for successful fitting
         model.fit(X, y, background=background)
+
+        # check that the tree of the clone is not fitted
+        with self.assertRaises(AttributeError):
+            clone.representation.tree.classes_ # should not exist
 
         # check that max_leaf_nodes is respected
         f_random = np.random.dirichlet(np.ones(len(target_bins)-1))
@@ -94,7 +116,13 @@ class TestTreeBinning(TestCase):
 
     def test_correct_binning(self):
         n_classes = 6
-        X, y = make_classification(n_samples=1_000, n_features=10, n_informative=7, n_classes=n_classes)
+        X, y = make_classification(
+            n_samples=1_000,
+            n_features=10,
+            n_informative=7,
+            n_classes=n_classes,
+            random_state=1491,
+        )
 
         max_n_bins_proxy = 7
         tree = DecisionTreeClassifier(max_leaf_nodes=max_n_bins_proxy).fit(X[:900], y[:900])
@@ -190,6 +218,43 @@ class TestGridSearchRepresentation(TestCase):
         binning = caife.GridSearchRepresentation(base_binning, empty_grid)
         A_rep = binning.fit_transform(X, y)
         self.assertTrue(np.all(A_rep == A_best))
+
+
+class TestSystematicBinCollection(TestCase):
+    def test_create_bin_indices(self):
+        rng = np.random.default_rng(1491)
+        for n_systematics in range(1, 6):
+            systematics = rng.uniform(size=(10_000, n_systematics))
+            for n_bins_per_systematic in range(2, 6):
+
+                # test create_systematic_bins
+                systematic_bins = SystematicBinCollection.create_systematic_bins(
+                    systematics,
+                    n_bins_per_systematic,
+                )
+                self.assertEqual(
+                    systematic_bins.shape,
+                    (n_systematics, n_bins_per_systematic+1),
+                )
+                np.testing.assert_equal(systematic_bins[:,0], -np.inf)
+                np.testing.assert_equal(systematic_bins[:,-1], np.inf)
+
+                # test create_bin_indices
+                bin_indices = SystematicBinCollection.create_bin_indices(
+                    systematics,
+                    systematic_bins
+                )
+                self.assertEqual(
+                    len(bin_indices),
+                    n_bins_per_systematic ** n_systematics,
+                )
+
+                # check that every sample occurs exactly once
+                n_sampled = np.zeros(len(systematics), dtype=int)
+                for is_in_bin in bin_indices.values():
+                    n_sampled[is_in_bin] += 1
+                self.assertEqual(n_sampled.min(), 1)
+                self.assertEqual(n_sampled.max(), 1)
 
 
 if __name__ == '__main__':
