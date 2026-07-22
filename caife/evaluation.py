@@ -4,7 +4,7 @@ import jax
 import numpy as np
 from .solvers import flatten_result, unflatten_result
 
-def global_correlation_coefficients(result, nll, ignore_overflow_bins=True):
+def global_correlation_coefficients(result, nll, args=(), ignore_overflow_bins=True):
     """Compute the global correlation coefficient, as proposed by James: Statistical Methods in Experimental Physics (2006) and by Morik & Rhode: Discovery in Physics (2023). This coefficient should be minimal in unfolding because the true target bins should be independent, such that any correlations should be regarded as artifacts that stem from the reconstruction process.
 
     James (2006) defines the global correlation coefficient of a single parameter P as the maximum correlation between P and all possible linear combinations of all other parameters. Morik & Rhode (2023) apply this idea to unfolding by assessing the mean global correlation coefficient over all target bins. This assessment is implemented here.
@@ -12,17 +12,18 @@ def global_correlation_coefficients(result, nll, ignore_overflow_bins=True):
     Args:
         result: A JAX pytree of result components; could be a single spectrum of shape (n_target_bins,).
         nll: The negative log-likelihood function that the `result` minimizes.
+        args (optional): A tuple of extra arguments that are passed to `nll`. Defaults to `()`.
         ignore_overflow_bins (optional): A JAX pytree specifying where to ignore the correlations with the two over- and underflow bins. Defaults to `True`.
 
     Returns:
         A JAX pytree of the global correlation coefficients corresponding to result components.
     """
     result_vec, resultdef = flatten_result(result)
-    def vec_nll(result_vec): # assume nll: result -> loss
-        return nll(unflatten_result(resultdef, result_vec))
+    def vec_nll(result_vec, *args):
+        return nll(unflatten_result(resultdef, result_vec), *args)
 
     # compute the joint Hessian across all result components
-    joint_hessian = jax.jacfwd(jax.grad(vec_nll))(result_vec)
+    joint_hessian = jax.jacfwd(jax.grad(vec_nll))(result_vec, *args)
     joint_hessian = np.sqrt(.5) * joint_hessian # apply Minuit's scaling
 
     # split the joint Hessian into component-wise sub-Hessians
@@ -60,7 +61,7 @@ def global_correlation_coefficients(result, nll, ignore_overflow_bins=True):
     return gccs
 
 
-def pairwise_correlation_scores(result, nll, ignore_overflow_bins=True):
+def pairwise_correlation_scores(result, nll, args=(), ignore_overflow_bins=True):
     """Compute the average pair-wise correlation.
 
     This alternative to the `global_correlation_coefficients` computes the correlation matrix from the covariance matrix and averages all off-diagonal entries. Hence, it computes the average pair-wise correlation between target bins instead of the average maximum correlation of each target bin with all linear combinations of the other bins.
@@ -68,17 +69,18 @@ def pairwise_correlation_scores(result, nll, ignore_overflow_bins=True):
     Args:
         result: A JAX pytree of result components; could be a single spectrum of shape (n_target_bins,).
         nll: The negative log-likelihood function that the `result` minimizes.
+        args (optional): A tuple of extra arguments that are passed to `nll`. Defaults to `()`.
         ignore_overflow_bins (optional): A JAX pytree specifying where to ignore the correlations with the two over- and underflow bins. Defaults to `True`.
 
     Returns:
         A JAX pytree of the pair-wise correlation scores corresponding to result components.
     """
     result_vec, resultdef = flatten_result(result)
-    def vec_nll(result_vec): # assume nll: result -> loss
-        return nll(unflatten_result(resultdef, result_vec))
+    def vec_nll(result_vec, *args):
+        return nll(unflatten_result(resultdef, result_vec), *args)
 
     # compute the joint Hessian across all result components
-    joint_hessian = jax.jacfwd(jax.grad(vec_nll))(result_vec)
+    joint_hessian = jax.jacfwd(jax.grad(vec_nll))(result_vec, *args)
 
     # compute the covariance / error matrix, as in Minuit, and derive the correlation
     joint_cov = np.linalg.inv(np.sqrt(.5) * joint_hessian)
