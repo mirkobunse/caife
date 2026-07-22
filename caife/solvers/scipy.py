@@ -88,10 +88,10 @@ class DerivativeError(Exception):
 def _check_derivative(jac_or_hess, name):
     if jac_or_hess is None:
         return None
-    return lambda x: _check_derivative_at_x(jac_or_hess, name, x)
+    return lambda x, *args: _check_derivative_at_x(jac_or_hess, name, x, args)
 
-def _check_derivative_at_x(jac_or_hess, name, x):
-    result = jac_or_hess(x)
+def _check_derivative_at_x(jac_or_hess, name, x, args):
+    result = jac_or_hess(x, *args)
     if not np.all(np.isfinite(result)):
         raise DerivativeError(name, result)
     return result
