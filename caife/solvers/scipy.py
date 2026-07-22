@@ -35,17 +35,18 @@ class ScipySolver(AbstractSolver):
     solver: str = "trust-ncg"
     solver_options: dict[str,object] = field(default_factory=SOLVER_OPTIONS_FACTORY)
 
-    def solve_latent(self, latent_nll, x0):
-        opt = minimize(latent_nll, x0, self.solver, self.solver_options)
+    def solve_latent(self, latent_nll, x0, args):
+        opt = minimize(latent_nll, x0, args, self.solver, self.solver_options)
         return opt.x, { "opt": opt }
 
 
-def minimize(loss_fn, x0, solver="trust-ncg", solver_options=None):
+def minimize(loss_fn, x0, args=(), solver="trust-ncg", solver_options=None):
     """Minimize a loss function with a SciPy back-end.
 
     Args:
         loss_fn: The loss function to minimize.
         x0: The initial guess (i.e., starting point) for the minimization.
+        args (optional): A tuple of extra arguments that are passed to `loss_fn`. Defaults to `()`.
         solver (optional): The `method` argument in `scipy.optimize.minimize`. Defaults to "trust-ncg".
         solver_options (optional): The `options` argument in `scipy.optimize.minimize`. Defaults to `None`, which is interpreted as `caife.solvers.scipy.SOLVER_OPTIONS_FACTORY()`.
 
@@ -68,6 +69,7 @@ def minimize(loss_fn, x0, solver="trust-ncg", solver_options=None):
             x0,
             jac=_check_derivative(jac, "jac"), # safe-guard derivatives
             hess=_check_derivative(hess, "hess"),
+            args=args,
             method=solver,
             options=solver_options,
             callback=state.callback(),

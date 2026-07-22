@@ -15,9 +15,9 @@ class _LatentVector(caife.models.latents.AbstractLatentVector):
 
 
 class _Solver(caife.solvers.AbstractSolver):
-    def solve_latent(self, latent_nll, x0):
-        value = latent_nll(x0) # call the function
-        return x0, {"value": value} # = ell*, aux
+    def solve_latent(self, latent_nll, x0, args):
+        value = latent_nll(x0, *args) # call the function
+        return x0, {"value": value} # = ell, aux
 
 
 class TestAbstractSolver(TestCase):
@@ -38,7 +38,7 @@ class TestAbstractSolver(TestCase):
                     projected_components,
                     tuple(x + 1 for x in result_components),
                 )
-                return -1
+                return np.array(-1)
             result, aux = _Solver().solve(
                 nll,
                 latent_vectors,
