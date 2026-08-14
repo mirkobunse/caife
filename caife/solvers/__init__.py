@@ -1,13 +1,14 @@
 """Module containing solvers of unfolding equations."""
 
-import jax
-import jax.numpy as jnp
-import numpy as np
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
+import jax
+import jax.numpy as jnp
+import numpy as np
 
-def flatten_result(tree):
+
+def flatten_result(tree):  # TODO replace with https://docs.jax.dev/en/latest/_autosummary/jax.flatten_util.ravel_pytree.html
     """TODO"""
     shapes = jax.tree.map(lambda x: np.array(x.shape), tree)
     leaves = jax.tree.leaves(jax.tree.map(lambda x: x.reshape(-1), tree))
@@ -38,22 +39,20 @@ class AbstractSolver(ABC):
         seed (optional): Random number generator seed. Defaults to `None`.
 
     Note:
-        Concrete sub-classes of this abstract class can extend the `__post_init__` method to perform additional initialization steps like differentiating the objective function. So far, the `__post_init__` method already initializes `self.starting_vector_` and `self.latent_nll_`, which are to be used in implementations of the abstract method `solve_latent`.
+        Concrete sub-classes of this abstract class can extend the `__post_init__` method to perform additional initialization steps like differentiating the objective function. So far, the `__post_init__` method already initializes `self.latent_nll_`, which should be used in implementations of the abstract method `solve_latent`.
     """
     nll: callable
     latent_vectors: any # a pytree
     seed: int | None = None
 
     def __post_init__(self):
-        # create a random starting point for each latent variable
-        rng = np.random.RandomState(self.seed)
-        starting_points = jax.tree.map(
-            lambda x: x.create_starting_point(rng),
-            self.latent_vectors,
-        )
+        self._rng = np.random.RandomState(self.seed)
 
         # extract the PyTree structure
-        self.starting_vector_, self.resultdef_ = flatten_result(starting_points)
+        self.resultdef_ = flatten_result(jax.tree.map(
+            lambda x: x.create_starting_point(np.random.RandomState(0)),
+            self.latent_vectors,
+        ))[1]
 
         # solve the Fredholm equation through minimizing the latent objective
         def latent_nll(ell, *args):
@@ -66,6 +65,13 @@ class AbstractSolver(ABC):
             value = self.nll(params, *args)
             return value.squeeze() # ensure that a float is retured
         self.latent_nll_ = latent_nll
+
+    def create_starting_vector(self):
+        """TODO."""
+        return flatten_result(jax.tree.map(
+            lambda x: x.create_starting_point(self._rng),
+            self.latent_vectors,
+        ))[0]
 
     def solve(self, args=(), return_aux=False):
         """Solve the unfolding problem.

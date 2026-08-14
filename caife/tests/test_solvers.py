@@ -16,8 +16,8 @@ class _LatentVector(caife.models.latents.AbstractLatentVector):
 
 class _Solver(caife.solvers.AbstractSolver):
     def solve_latent(self, args):
-        value = self.latent_nll_(self.starting_vector_, *args) # call the function
-        return self.starting_vector_, {"value": value} # = ell, aux
+        value = self.latent_nll_(self.create_starting_vector(), *args) # call the function
+        return self.create_starting_vector(), {"value": value} # = ell, aux
 
 
 class TestAbstractSolver(TestCase):

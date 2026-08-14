@@ -1,7 +1,8 @@
-import jax
-import jax.numpy as jnp
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+
+import jax
+import jax.numpy as jnp
 from numpy.typing import ArrayLike
 
 
@@ -49,7 +50,9 @@ class LatentSpectrum(AbstractLatentVector):
         return self.n_samples * p_est
 
     def create_starting_point(self, rng=None):
-        return jnp.array(rng.rand(self.n_bins_target-1) * 2 - 1)
+        # draw logits that are uniformly distributed after applying a softmax
+        logits = jnp.log(rng.exponential(size=self.n_bins_target))
+        return logits[:, 1:] - logits[:, [0]] # fix the first dimension to zero
 
 
 @dataclass
@@ -65,4 +68,6 @@ class LatentSystematics(AbstractLatentVector):
         return self.bounds[:,0] + (self.bounds[:,1] - self.bounds[:,0]) * jax.nn.sigmoid(ell)
 
     def create_starting_point(self, rng=None):
-        return jnp.zeros(self.bounds.shape[0])
+        # draw logits, each uniformly distributed after applying a sigmoid
+        uniform = rng.uniform(size=self.bounds.shape[0])
+        return jnp.log(uniform / (1 - uniform))

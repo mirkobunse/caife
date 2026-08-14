@@ -49,7 +49,7 @@ class ScipySolver(AbstractSolver):
     def solve_latent(self, args):
         opt = minimize(
             self.latent_nll_,
-            self.starting_vector_,
+            self.create_starting_vector(),
             args=args,
             jac=self.latent_jac_,
             hess=self.latent_hess_,
