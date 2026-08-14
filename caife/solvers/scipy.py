@@ -58,7 +58,7 @@ class ScipySolver(AbstractSolver):
             solver_options=self.solver_options,
         )
         aux = {"opt": opt}
-        return opt.x, aux
+        return opt.x, opt.fun, aux
 
 
 def minimize(

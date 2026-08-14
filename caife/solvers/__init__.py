@@ -36,6 +36,7 @@ class AbstractSolver(ABC):
     Args:
         nll: The negative log-likelihood function with the signature `nll(params, *args) -> float`, where `params` is a pytree containing vectors in their natural target space, e.g., count spectra or systematic paramenter vectors, and `args` is a tuple of fixed parameters of the function.
         latent_vectors: A JAX pytree of latent vectors. These vectors describe, for all model paramenters, the mapping between their latent and natural target spaces as well as the generation of their starting points in latent space.
+        n_trials: The number of random trials, each with a new, random starting point. Defaults to `20`.
         seed (optional): Random number generator seed. Defaults to `None`.
 
     Note:
@@ -43,6 +44,7 @@ class AbstractSolver(ABC):
     """
     nll: callable
     latent_vectors: any # a pytree
+    n_trials: int = 20
     seed: int | None = None
 
     def __post_init__(self):
@@ -83,14 +85,18 @@ class AbstractSolver(ABC):
         Returns:
             A result pytree with the same structure as the given `latent_vectors`. If `return_aux` is `True`, return a pair of this pytree and a `dict` of auxiliary information.
         """
-        ell, aux = self.solve_latent(args)
+        # create results in latent space, as tuples (ell, value, aux)
+        latent_results = [self.solve_latent(args) for _ in range(self.n_trials)]
+
+        # find the best result
+        best_ell = latent_results[np.argmin([x[1] for x in latent_results])][0]
         result = jax.tree.map( # map to latents to target spaces
             lambda latent_vector, ell: latent_vector(ell),
             self.latent_vectors,
-            unflatten_result(self.resultdef_, ell),
+            unflatten_result(self.resultdef_, best_ell),
         )
         if return_aux:
-            return result, aux
+            return result, {"latent_results": latent_results}
         else:
             return result
 
@@ -102,9 +108,9 @@ class AbstractSolver(ABC):
             args: A tuple of extra arguments that are passed to `latent_nll`.
 
         Returns:
-            A pair `(ell, aux)` of a single combined latent solution vector `ell` and an auxiliary information object `aux`.
+            A tuple `(ell, value, aux)` of a single combined latent solution vector `ell`, an objective function `value`, and an auxiliary information object `aux`.
 
         Note:
-            Implementations of this abstract method should minimize `self.latent_nll_` starting from `self.starting_vector_`. These class members represent the negative log-likelihood function that takes only a single combined latent vector as an argument and the single combined starting point in latent space.
+            Implementations of this abstract method should minimize `self.latent_nll_` starting from `self.create_starting_vector()`. These class members represent the negative log-likelihood function that takes only a single combined latent vector as an argument and the single combined starting point in latent space.
         """
         pass

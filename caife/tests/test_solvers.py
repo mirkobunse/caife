@@ -17,7 +17,7 @@ class _LatentVector(caife.models.latents.AbstractLatentVector):
 class _Solver(caife.solvers.AbstractSolver):
     def solve_latent(self, args):
         value = self.latent_nll_(self.create_starting_vector(), *args) # call the function
-        return self.create_starting_vector(), {"value": value} # = ell, aux
+        return self.create_starting_vector(), value, {"value": value} # = ell, aux
 
 
 class TestAbstractSolver(TestCase):
@@ -40,7 +40,9 @@ class TestAbstractSolver(TestCase):
                 )
                 return np.array(-1)
             result, aux = _Solver(nll, latent_vectors).solve(return_aux=True)
-            self.assertEqual(aux, {"value": -1})
+            for latent_result in aux["latent_results"]:
+                self.assertEqual(latent_result[1], -1)
+                self.assertEqual(latent_result[2], {"value": -1})
 
 
 if __name__ == '__main__':
