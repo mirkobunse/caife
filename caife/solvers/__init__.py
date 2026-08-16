@@ -2,6 +2,7 @@
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from typing import NamedTuple
 
 import jax
 import jax.numpy as jnp
@@ -27,6 +28,30 @@ def unflatten_result(resultdef, leaves_vec):
     )
     tree = jax.tree.unflatten(jax.tree.structure(shapes), leaves)
     return jax.tree.map(lambda x, s: x.reshape(s), tree, shapes)
+
+
+class LatentResult(NamedTuple):
+    """A result in latent space, with extra information.
+
+    Args:
+        ell: The result in latent space, shape (n_free_parameters,)
+        is_valid: Whether the result is valid; invalid results will be excluded.
+        value: The loss function value associated with the result; smaller is better.
+        aux: A dict of any auxiliary information.
+    """
+    ell: list
+    is_valid: bool
+    value: float
+    aux: dict
+
+
+def is_valid_hessian(hess):
+    """Check whether a Hessian matrix is positive definite, and thereby represents a valid solution."""
+    try: # https://stackoverflow.com/a/44287862/11567260 for a symmetric matrix
+        np.linalg.cholesky(hess)
+        return True
+    except np.linalg.LinAlgError:
+        return False
 
 
 @dataclass
@@ -108,7 +133,7 @@ class AbstractSolver(ABC):
             args: A tuple of extra arguments that are passed to `latent_nll`.
 
         Returns:
-            A tuple `(ell, value, aux)` of a single combined latent solution vector `ell`, an objective function `value`, and an auxiliary information object `aux`.
+            A `LatentResult`.
 
         Note:
             Implementations of this abstract method should minimize `self.latent_nll_` starting from `self.create_starting_vector()`. These class members represent the negative log-likelihood function that takes only a single combined latent vector as an argument and the single combined starting point in latent space.

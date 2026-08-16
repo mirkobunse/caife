@@ -1,11 +1,12 @@
+import traceback
+from dataclasses import dataclass, field
+
 import jax
 import jax.numpy as jnp
 import numpy as np
-import traceback
-from dataclasses import dataclass, field
 from scipy import optimize
-from . import AbstractSolver
 
+from . import AbstractSolver, LatentResult, is_valid_hessian
 
 """Factory function, without arguments, to create solver options."""
 SOLVER_OPTIONS_FACTORY = lambda: {
@@ -57,8 +58,13 @@ class ScipySolver(AbstractSolver):
             solver=self.solver,
             solver_options=self.solver_options,
         )
-        aux = {"opt": opt}
-        return opt.x, opt.fun, aux
+        hess = opt.get("hess", self.latent_hess_(opt.x))
+        return LatentResult(
+            ell=opt.x,
+            is_valid=is_valid_hessian(hess),
+            value=opt.fun,
+            aux={"opt": opt},
+        )
 
 
 def minimize(
