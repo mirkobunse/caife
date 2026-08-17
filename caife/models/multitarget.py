@@ -50,10 +50,10 @@ class MultiTargetModel(AbstractModel):
         self.As_ = As
 
     def proxy_view(self, X, sample_weight=None, separate=True):
-        def create_view(representation):
-            g = self.representation.transform(X, sample_weight=sample_weight)
-            return jnp.array(g * len(X)) # scale to counts
-        separate_views = [create_view(r) for r in self.representations]
+        def create_view(X_i, representation):
+            g = representation.transform(X_i.reshape((-1, 1)), sample_weight=sample_weight)
+            return jnp.array(g * len(X_i)) # scale to counts
+        separate_views = [create_view(X_i, r) for X_i, r in zip(X.T, self.representations)]
         if separate:
             return separate_views
         return jnp.concatenate(separate_views)
@@ -76,8 +76,8 @@ class MultiTargetModel(AbstractModel):
         ]).T # shape (n_samples, n_targets)
         if separate:
             return Y
-        factors = np.concatenate(([1], np.cumprod(self.n_bins_per_target[:-1])))
-        return np.sum(Y * factors, axis=1)
+        factors = np.concatenate(([1], np.cumprod(self.n_bins_per_target[::-1][:-1])))
+        return np.sum(Y[:,::-1] * factors, axis=1)
 
     def create_latents(self, X): # create a single latent such that params = f
         return LatentSpectrum(n_samples=len(X), n_bins_target=self.n_bins_multitarget)

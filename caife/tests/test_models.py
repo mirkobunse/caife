@@ -137,6 +137,46 @@ class TestMultiTargetModel(TestCase):
         model.fit(X, Y)
         for A_i, representation in zip(model.As_, representations):
             self.assertEqual(A_i.shape, (representation.n_output_features, 8))
+        self.assertEqual(model.n_bins_multitarget, 8)
+        np.testing.assert_equal(model.n_bins_per_target, [4, 2])
+
+        # instantiate standard models as a reference
+        model_a = caife.LinearCountModel(
+            target_bins=target_bins[0],
+            representation=representations[0],
+        )
+        model_b = caife.LinearCountModel(
+            target_bins=target_bins[1],
+            representation=representations[1],
+        )
+
+        # check for equivalence in target and proxy views
+        np.testing.assert_equal(
+            model.represent_targets(Y, separate=True)[:,0],
+            model_a.represent_target(Y[:,0]),
+        )
+        np.testing.assert_equal(
+            model.represent_targets(Y, separate=True)[:,1],
+            model_b.represent_target(Y[:,1]),
+        )
+        np.testing.assert_equal(
+            model.proxy_view(X)[0],
+            model_a.proxy_view(X[:,[0]]),
+        )
+        np.testing.assert_equal(
+            model.proxy_view(X)[1],
+            model_b.proxy_view(X[:,[1]]),
+        )
+        y_a = model_a.represent_target(Y[:,0])
+        y_b = model_b.represent_target(Y[:,1])
+        reference = np.zeros(model.n_bins_per_target)
+        for i_a in range(model_a.n_bins_target):
+            for i_b in range(model_b.n_bins_target):
+                reference[i_a, i_b] = np.sum((y_a == i_a) & (y_b == i_b))
+        np.testing.assert_equal(
+            model.target_view(Y).reshape(model.n_bins_per_target),
+            reference,
+        )
 
 
 if __name__ == '__main__':
