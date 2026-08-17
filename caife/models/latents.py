@@ -70,7 +70,7 @@ class LatentReshape(AbstractLatentVector):
         return self.latent_vector(ell).reshape(self.shape)
 
     def create_starting_point(self, rng=None):
-        return self.latent_vector.create_starting_point(rng).reshape(self.shape)
+        return self.latent_vector.create_starting_point(rng)
 
 
 @dataclass
