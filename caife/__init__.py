@@ -1,4 +1,4 @@
-__version__ = "0.0.4-rc1"
+__version__ = "0.0.4-rc2"
 
 # necessary for successful scipy.minimize
 from jax import config
@@ -17,6 +17,7 @@ from .models import (
 
 from .models.latents import (
     AbstractLatentVector,
+    LatentReshape,
     LatentSpectrum,
     LatentSystematics,
 )

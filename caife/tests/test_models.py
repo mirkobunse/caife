@@ -173,10 +173,7 @@ class TestMultiTargetModel(TestCase):
         for i_a in range(model_a.n_bins_target):
             for i_b in range(model_b.n_bins_target):
                 reference[i_a, i_b] = np.sum((y_a == i_a) & (y_b == i_b))
-        np.testing.assert_equal(
-            model.target_view(Y).reshape(model.n_bins_per_target),
-            reference,
-        )
+        np.testing.assert_equal(model.target_view(Y), reference)
 
 
 if __name__ == '__main__':

@@ -56,6 +56,24 @@ class LatentSpectrum(AbstractLatentVector):
 
 
 @dataclass
+class LatentReshape(AbstractLatentVector):
+    """Reshapes a latent vector.
+
+    Args:
+        latent_vector: The latent vector to reshape.
+        shape: The desired shape.
+    """
+    latent_vector: AbstractLatentVector
+    shape: list[int]
+
+    def __call__(self, ell):
+        return self.latent_vector(ell).reshape(self.shape)
+
+    def create_starting_point(self, rng=None):
+        return self.latent_vector.create_starting_point(rng).reshape(self.shape)
+
+
+@dataclass
 class LatentSystematics(AbstractLatentVector):
     """Transforms a latent variable through a sigmoid that is scaled to match the given bounds. Through this design choice, the value of the systematic parameter will always be within the given bounds.
 

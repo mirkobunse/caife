@@ -5,7 +5,7 @@ from jax import numpy as jnp
 from qunfold import AbstractRepresentation
 
 from . import AbstractModel
-from .latents import LatentSpectrum
+from .latents import LatentReshape, LatentSpectrum
 
 
 @dataclass
@@ -64,7 +64,7 @@ class MultiTargetModel(AbstractModel):
             weights=sample_weight,
             minlength=self.n_bins_multitarget,
         )
-        return f * (Y.shape[0] / f.sum()) # scale to counts
+        return f.reshape(self.n_bins_per_target) * (Y.shape[0] / f.sum()) # scale to counts
 
     def represent_targets(self, Y, separate=False):
         """Represent each individual target through binning."""
@@ -80,10 +80,13 @@ class MultiTargetModel(AbstractModel):
         return np.sum(Y[:,::-1] * factors, axis=1)
 
     def create_latents(self, X): # create a single latent such that params = f
-        return LatentSpectrum(n_samples=len(X), n_bins_target=self.n_bins_multitarget)
+        return LatentReshape(
+            LatentSpectrum(n_samples=len(X), n_bins_target=self.n_bins_multitarget),
+            self.n_bins_per_target, # = shape
+        )
 
-    def __call__(self, f): # f = params with shape (self.n_bins_multitarget,)
-        g_pred = [A @ f + g for A, g in zip(self.As_, self.gs_background_)]
+    def __call__(self, f): # f = params with shape tuple(self.n_bins_per_target)
+        g_pred = [A @ f.reshape(-1) + g for A, g in zip(self.As_, self.gs_background_)]
         return g_pred
 
     @property
