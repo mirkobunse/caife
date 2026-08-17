@@ -2,7 +2,7 @@
 
 import jax
 import numpy as np
-from .solvers import flatten_result, unflatten_result
+
 
 def global_correlation_coefficients(result, nll, args=(), ignore_overflow_bins=True):
     """Compute the global correlation coefficient, as proposed by James: Statistical Methods in Experimental Physics (2006) and by Morik & Rhode: Discovery in Physics (2023). This coefficient should be minimal in unfolding because the true target bins should be independent, such that any correlations should be regarded as artifacts that stem from the reconstruction process.
@@ -18,16 +18,17 @@ def global_correlation_coefficients(result, nll, args=(), ignore_overflow_bins=T
     Returns:
         A JAX pytree of the global correlation coefficients corresponding to result components.
     """
-    result_vec, resultdef = flatten_result(result)
+    result_vec, unravel_fn = jax.flatten_util.ravel_pytree(result)
     def vec_nll(result_vec, *args):
-        return nll(unflatten_result(resultdef, result_vec), *args)
+        return nll(unravel_fn(result_vec), *args)
 
     # compute the joint Hessian across all result components
     joint_hessian = jax.jacfwd(jax.grad(vec_nll))(result_vec, *args)
     joint_hessian = np.sqrt(.5) * joint_hessian # apply Minuit's scaling
 
     # split the joint Hessian into component-wise sub-Hessians
-    shapes, boundaries = resultdef # extract boundaries
+    sizes, treedef = jax.tree.flatten(jax.tree.map(lambda x: np.size(x), result))
+    boundaries = np.cumsum(np.concatenate(([0], sizes)))
     sub_hessians = (
         joint_hessian[
             boundaries[i]:boundaries[i+1],
@@ -36,7 +37,7 @@ def global_correlation_coefficients(result, nll, args=(), ignore_overflow_bins=T
         for i in range(len(boundaries)-1)
     )
     sub_hessians = jax.tree.unflatten( # organize in a pytree
-        jax.tree.structure(shapes),
+        treedef,
         sub_hessians,
     )
 
@@ -53,7 +54,7 @@ def global_correlation_coefficients(result, nll, args=(), ignore_overflow_bins=T
         return sub_gccs.mean()
     if isinstance(ignore_overflow_bins, bool):
         ignore_overflow_bins = jax.tree.unflatten( # repeat across tree structure
-            jax.tree.structure(shapes),
+            treedef,
             [ignore_overflow_bins for _ in range(len(boundaries)-1)],
         )
     with np.errstate(invalid="ignore"):
@@ -75,9 +76,9 @@ def pairwise_correlation_scores(result, nll, args=(), ignore_overflow_bins=True)
     Returns:
         A JAX pytree of the pair-wise correlation scores corresponding to result components.
     """
-    result_vec, resultdef = flatten_result(result)
+    result_vec, unravel_fn = jax.flatten_util.ravel_pytree(result)
     def vec_nll(result_vec, *args):
-        return nll(unflatten_result(resultdef, result_vec), *args)
+        return nll(unravel_fn(result_vec), *args)
 
     # compute the joint Hessian across all result components
     joint_hessian = jax.jacfwd(jax.grad(vec_nll))(result_vec, *args)
@@ -89,7 +90,8 @@ def pairwise_correlation_scores(result, nll, args=(), ignore_overflow_bins=True)
             np.diagonal(joint_cov) * np.diagonal(joint_cov).reshape(-1,1))
 
     # split the joint correlation matrix into component-wise sub-correlation matrices
-    shapes, boundaries = resultdef # extract boundaries
+    sizes, treedef = jax.tree.flatten(jax.tree.map(lambda x: np.size(x), result))
+    boundaries = np.cumsum(np.concatenate(([0], sizes)))
     sub_corrs = (
         joint_corr[
             boundaries[i]:boundaries[i+1],
@@ -98,7 +100,7 @@ def pairwise_correlation_scores(result, nll, args=(), ignore_overflow_bins=True)
         for i in range(len(boundaries)-1)
     )
     sub_corrs = jax.tree.unflatten( # organize in a pytree
-        jax.tree.structure(shapes),
+        treedef,
         sub_corrs,
     )
 
@@ -109,7 +111,7 @@ def pairwise_correlation_scores(result, nll, args=(), ignore_overflow_bins=True)
         return np.mean(np.abs(np.triu(joint_corr, k=1))) # average off-diagonal
     if isinstance(ignore_overflow_bins, bool):
         ignore_overflow_bins = jax.tree.unflatten( # repeat across tree structure
-            jax.tree.structure(shapes),
+            treedef,
             [ignore_overflow_bins for _ in range(len(boundaries)-1)],
         )
     with np.errstate(invalid="ignore"):

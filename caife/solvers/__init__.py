@@ -9,27 +9,6 @@ import jax.numpy as jnp
 import numpy as np
 
 
-def flatten_result(tree):  # TODO replace with https://docs.jax.dev/en/latest/_autosummary/jax.flatten_util.ravel_pytree.html
-    """TODO"""
-    shapes = jax.tree.map(lambda x: np.array(x.shape), tree)
-    leaves = jax.tree.leaves(jax.tree.map(lambda x: x.reshape(-1), tree))
-    boundaries = np.concatenate(
-        ([0], np.cumsum([len(x) for x in leaves]))
-    )
-    return np.concatenate(leaves), (shapes, boundaries)
-
-
-def unflatten_result(resultdef, leaves_vec):
-    """TODO"""
-    shapes, boundaries = resultdef
-    leaves = ( # split the single vector into its leaf components
-        leaves_vec[boundaries[i]:boundaries[i+1]]
-        for i in range(len(boundaries)-1)
-    )
-    tree = jax.tree.unflatten(jax.tree.structure(shapes), leaves)
-    return jax.tree.map(lambda x, s: x.reshape(s), tree, shapes)
-
-
 class LatentResult(NamedTuple):
     """A result in latent space, with extra information.
 
@@ -76,14 +55,14 @@ class AbstractSolver(ABC):
         self._rng = np.random.RandomState(self.seed)
 
         # extract the PyTree structure
-        self.resultdef_ = flatten_result(jax.tree.map(
+        self.unravel_fn_ = jax.flatten_util.ravel_pytree(jax.tree.map(
             lambda x: x.create_starting_point(np.random.RandomState(0)),
             self.latent_vectors,
         ))[1]
 
         # solve the Fredholm equation through minimizing the latent objective
         def latent_nll(ell, *args):
-            ell = unflatten_result(self.resultdef_, ell)
+            ell = self.unravel_fn_(ell)
             params = jax.tree.map( # map to latents to target spaces
                 lambda latent_vector, ell: latent_vector(ell),
                 self.latent_vectors,
@@ -95,7 +74,7 @@ class AbstractSolver(ABC):
 
     def create_starting_vector(self):
         """TODO."""
-        return flatten_result(jax.tree.map(
+        return jax.flatten_util.ravel_pytree(jax.tree.map(
             lambda x: x.create_starting_point(self._rng),
             self.latent_vectors,
         ))[0]
@@ -110,18 +89,26 @@ class AbstractSolver(ABC):
         Returns:
             A result pytree with the same structure as the given `latent_vectors`. If `return_aux` is `True`, return a pair of this pytree and a `dict` of auxiliary information.
         """
-        # create results in latent space, as tuples (ell, value, aux)
+        # create LatentResults
         latent_results = [self.solve_latent(args) for _ in range(self.n_trials)]
 
+        # unravel and map these results to their target space
+        def unravel_to_target_space(ell):
+            return jax.tree.map( # map to latents to target spaces
+                lambda latent_vector, ell: latent_vector(ell),
+                self.latent_vectors,
+                self.unravel_fn_(ell),
+            )
+        results = [unravel_to_target_space(r.ell) for r in latent_results]
+
         # find the best result
-        best_ell = latent_results[np.argmin([x[1] for x in latent_results])][0]
-        result = jax.tree.map( # map to latents to target spaces
-            lambda latent_vector, ell: latent_vector(ell),
-            self.latent_vectors,
-            unflatten_result(self.resultdef_, best_ell),
-        )
+        result = results[np.argmin([r.value for r in latent_results])]
         if return_aux:
-            return result, {"latent_results": latent_results}
+            aux = {
+                "results": results,
+                "latent_results": latent_results,
+            }
+            return result, aux
         else:
             return result
 

@@ -2,7 +2,7 @@
 
 import jax
 import numpy as np
-from .solvers import flatten_result, unflatten_result
+
 
 def uncertainty_from_hessian(result, nll, args=(),):
     """Estimate statistical uncertainties in the style of Minuit.
@@ -15,13 +15,13 @@ def uncertainty_from_hessian(result, nll, args=(),):
     Returns:
         A JAX pytree of the pair-wise correlation scores corresponding to result components.
     """
-    result_vec, resultdef = flatten_result(result)
+    result_vec, unravel_fn = jax.flatten_util.ravel_pytree(result)
     def vec_nll(result_vec, *args):
-        return nll(unflatten_result(resultdef, result_vec), *args)
+        return nll(unravel_fn(result_vec), *args)
 
     # compute the joint Hessian across all result components
     joint_hessian = jax.jacfwd(jax.grad(vec_nll))(result_vec, *args)
 
     # compute the bin-wise errors, just as Minuit does
     errors = np.sqrt(np.diagonal(np.linalg.inv(np.sqrt(.5) * joint_hessian)))
-    return unflatten_result(resultdef, errors)
+    return unravel_fn(errors)
