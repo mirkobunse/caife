@@ -1,15 +1,18 @@
 """Module containing linear models of the measurement process."""
 
-import numpy as np
-import jax
 import time
-from . import AbstractModel
-from .latents import LatentSpectrum, LatentSystematics
-from ..solvers.scipy import minimize
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
+
+import jax
+import numpy as np
 from jax import numpy as jnp
 from optax.losses import softmax_cross_entropy
 from qunfold import AbstractRepresentation
+
+from ..solvers.scipy import minimize
+from . import AbstractModel
+from .latents import LatentSpectrum, LatentSystematics
+
 
 @dataclass
 class LinearCountModel(AbstractModel):

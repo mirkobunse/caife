@@ -1,11 +1,11 @@
 """Module containing common loss functions."""
 
-import jax
 import operator
-from jax import numpy as jnp
-from jax.typing import ArrayLike
 from functools import partial
 
+import jax
+from jax import numpy as jnp
+from jax.typing import ArrayLike
 
 _EPS = 1e-8
 

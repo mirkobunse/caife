@@ -1,7 +1,9 @@
 """Module containing models of the measurement process."""
 
 from abc import ABC, abstractmethod
+
 from jax import numpy as jnp
+
 
 class AbstractModel(ABC):
     """Abstract base class that all caife models inherit from."""

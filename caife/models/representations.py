@@ -1,10 +1,12 @@
 import itertools
-import numpy as np
 from dataclasses import dataclass
 from functools import partial
 from multiprocessing import Pool
+
+import numpy as np
 from qunfold import AbstractRepresentation
-from qunfold.methods import class_prevalences, check_y
+from qunfold.methods import check_y, class_prevalences
+
 
 @dataclass
 class TreeBinning(AbstractRepresentation):

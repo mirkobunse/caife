@@ -1,9 +1,11 @@
-import numpy as np
 import itertools
-import jax
-from . import AbstractModel
 from copy import deepcopy
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
+
+import jax
+import numpy as np
+
+from . import AbstractModel
 
 
 @dataclass
