@@ -29,7 +29,10 @@ class ScipySolver(AbstractSolver):
     """A solver with a SciPy back-end.
 
     Args:
-        seed: Random number generator seed. Defaults to `None`.
+        nll: The negative log-likelihood function with the signature `nll(params, *args) -> float`, where `params` is a pytree containing vectors in their natural target space, e.g., count spectra or systematic paramenter vectors, and `args` is a tuple of fixed parameters of the function.
+        latent_vectors: A JAX pytree of latent vectors. These vectors describe, for all model paramenters, the mapping between their latent and natural target spaces as well as the generation of their starting points in latent space.
+        n_trials: The number of random trials, each with a new, random starting point. Defaults to `20`.
+        seed (optional): Random number generator seed. Defaults to `None`.
         solver (optional): The `method` argument in `scipy.optimize.minimize`. Defaults to "trust-ncg".
         solver_options (optional): The `options` argument in `scipy.optimize.minimize`. Defaults to `caife.solvers.scipy.SOLVER_OPTIONS_FACTORY()`.
     """
@@ -42,10 +45,7 @@ class ScipySolver(AbstractSolver):
         # create all derivatives
         self.latent_nll_ = jax.jit(self.latent_nll_)
         self.latent_jac_ = jax.jit(jax.grad(self.latent_nll_))
-        if self.solver.lower() in _SECOND_ORDER_SOLVERS:
-            self.latent_hess_ = jax.jit(jax.jacfwd(self.latent_jac_))
-        else:
-            self.latent_hess_ = None
+        self.latent_hess_ = jax.jit(jax.jacfwd(self.latent_jac_))
 
     def solve_latent(self, args):
         opt = minimize(
@@ -58,11 +58,11 @@ class ScipySolver(AbstractSolver):
             solver=self.solver,
             solver_options=self.solver_options,
         )
-        hess = opt.get("hess", self.latent_hess_(opt.x))
+        hess = opt.get("hess", self.latent_hess_(opt.x, *args))
         return LatentResult(
             ell=opt.x,
             is_valid=is_valid_hessian(hess),
-            value=opt.fun,
+            value=opt.get("fun", self.latent_nll_(opt.x, *args)),
             aux={"opt": opt},
         )
 

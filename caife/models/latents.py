@@ -52,7 +52,7 @@ class LatentSpectrum(AbstractLatentVector):
     def create_starting_point(self, rng=None):
         # draw logits that are uniformly distributed after applying a softmax
         logits = jnp.log(rng.exponential(size=self.n_bins_target))
-        return logits[:, 1:] - logits[:, [0]] # fix the first dimension to zero
+        return logits[1:] - logits[0] # fix the first dimension to zero
 
 
 @dataclass
