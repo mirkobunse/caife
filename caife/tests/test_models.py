@@ -87,5 +87,57 @@ class TestSystematicBinCollection(TestCase):
                 self.assertEqual(n_sampled.max(), 1)
 
 
+class TestMultiTargetModel(TestCase):
+    def test(self):
+        rng = np.random.default_rng(1491)
+        Y = rng.uniform(size=(1_000, 2)) * 4
+        X = np.stack((
+            (Y[:,0] + rng.normal(size=1_000)),
+            (Y[:,1] + rng.normal(size=1_000)),
+        )).T
+
+        # assert that target_bins are required to range from -inf to inf
+        representations = [
+            caife.UnivariateBinning(
+                proxy_bins=np.concatenate(([-np.inf], np.arange(5), [np.inf]))),
+            caife.UnivariateBinning(
+                proxy_bins=np.concatenate(([-np.inf], np.arange(3), [np.inf]))),
+        ]
+        erroring_model = caife.MultiTargetModel(
+            target_bins=[np.arange(5), np.arange(3)], # not ranging from -inf to inf
+            representations=representations,
+        )
+        self.assertRaises( # erroring_model.fit(X, y) raises a ValueError
+            ValueError,
+            erroring_model.fit,
+            X, # *args
+            Y,
+        )
+
+        # assert correct target representation
+        target_bins = [
+            np.arange(5, dtype=float), # 4 classes
+            np.arange(3, dtype=float), # 2 classes
+        ]
+        for b_i in target_bins:
+            b_i[0] = -np.inf
+            b_i[-1] = np.inf
+        model = caife.MultiTargetModel(
+            target_bins=target_bins,
+            representations=representations,
+        )
+        self.assertEqual(model.represent_targets(Y).min(), 0)
+        self.assertEqual(model.represent_targets(Y).max(), 7)
+        for value in [ np.nan, np.inf, -np.inf ]:
+            self.assertRaises( # model.represent_target(inf | nan) raises a ValueError
+                ValueError,
+                model.represent_targets,
+                [ value ], # *args
+            )
+        model.fit(X, Y)
+        for A_i, representation in zip(model.As_, representations):
+            self.assertEqual(A_i.shape, (representation.n_output_features, 8))
+
+
 if __name__ == '__main__':
     unittest.main()

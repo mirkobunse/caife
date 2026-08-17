@@ -37,6 +37,10 @@ from .models.linear import (
     LinearSystematicsCountModel,
 )
 
+from .models.multitarget import (
+    MultiTargetModel,
+)
+
 from .solvers import (
     AbstractSolver,
 )
