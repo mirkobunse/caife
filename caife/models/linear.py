@@ -52,6 +52,8 @@ class LinearCountModel(AbstractModel):
 
     def _fit_transfer(self, X, y, sample_weight, systematics):
         """Fit the transfer model `A(s)`."""
+        if systematics is not None:
+            print("WARNING: LinearCountModel does not support systematics; chose another model")
         A = self.representation.fit_transform( # constant; no systematics modeled
             X,
             y,
