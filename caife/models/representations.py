@@ -102,6 +102,7 @@ class _SingleUnivariateBinning:
     def n_output_features_i(self):
         return len(self.proxy_bins_i) - 1
 
+
 @dataclass
 class UnivariateBinning(AbstractRepresentation):
     """TODO: add documentation"""
@@ -139,6 +140,52 @@ class UnivariateBinning(AbstractRepresentation):
     @property
     def n_output_features(self):
         return np.sum([b.n_output_features_i for b in self._binnings])
+
+
+@dataclass
+class GridBinning(AbstractRepresentation):
+    """TODO: add documentation"""
+    proxy_bins: list[list[float]]
+
+    def fit_transform(self, X, y, sample_weight=None, average=True, n_classes=None):
+        X = np.array(X)
+        if X.ndim != 2 or X.shape[1] != len(self.proxy_bins):
+            raise ValueError("X.shape != (n_samples, n_proxy_variables)")
+        check_y(y, n_classes)
+        self.p_trn = class_prevalences(y, n_classes)
+        n_classes = len(self.p_trn) # not None anymore
+        if not average:
+            return self.transform(X, average=False)
+        A = np.bincount( # nothing to fit; immediately return the transformed data
+            n_classes * self.represent_features(X) + y, # combined X*y bins
+            weights=sample_weight,
+            minlength=self.n_output_features * n_classes,
+        ).reshape((self.n_output_features, n_classes))
+        return A / A.sum(axis=0, keepdims=True)
+
+    def transform(self, X, sample_weight=None, average=True):
+        X = self.represent_features(X)
+        if not average:
+            return np.eye(self.n_output_features)[X] # one-hot encoding
+        g = np.bincount(X, weights=sample_weight, minlength=self.n_output_features)
+        return g / g.sum()
+
+    def represent_features(self, X):
+        """Represent all features jointly through binning."""
+        X = np.array([
+            np.digitize(X_i, b_i) - 1
+            for X_i, b_i in zip(X.T, self.proxy_bins)
+        ]).T # shape (n_samples, n_features)
+        factors = np.concatenate(([1], np.cumprod(self.n_bins_per_feature[::-1][:-1])))
+        return np.sum(X[:,::-1] * factors, axis=1)
+
+    @property
+    def n_output_features(self):
+        return np.prod(self.n_bins_per_feature)
+
+    @property
+    def n_bins_per_feature(self):
+        return np.array([len(x)-1 for x in self.proxy_bins])
 
 
 @dataclass

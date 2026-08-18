@@ -25,6 +25,7 @@ from .models.latents import (
 from .models.representations import (
     TreeBinning,
     UnivariateBinning,
+    GridBinning,
     GridSearchRepresentation,
 )
 
