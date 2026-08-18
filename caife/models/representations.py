@@ -72,40 +72,73 @@ class TreeBinning(AbstractRepresentation):
 
 
 @dataclass
+class _SingleUnivariateBinning:
+    """The `UnivariateBinning` of a single variable."""
+    proxy_bins_i : list[float]
+
+    def __post_init__(self):
+        if self.proxy_bins_i[0] > -np.inf or self.proxy_bins_i[-1] < np.inf:
+            raise ValueError("proxy_bins are not defined from -inf to inf")
+
+    def create_A_i(self, X_i, y, sample_weight, n_classes):
+        A_i = np.bincount( # nothing to fit; immediately return the transformed data
+            n_classes * self._digitize(X_i) + y, # combined X_i*y bins
+            weights=sample_weight,
+            minlength=self.n_output_features_i * n_classes,
+        ).reshape((self.n_output_features_i, n_classes))
+        return A_i / A_i.sum(axis=0, keepdims=True)
+
+    def transform_i(self, X_i, sample_weight=None, average=True):
+        X_i = self._digitize(X_i)
+        if not average:
+            return np.eye(self.n_output_features_i)[X_i] # one-hot encoding
+        g_i = np.bincount(X_i, weights=sample_weight, minlength=self.n_output_features_i)
+        return g_i / g_i.sum()
+
+    def _digitize(self, X_i):
+        return np.digitize(X_i, self.proxy_bins_i) - 1
+
+    @property
+    def n_output_features_i(self):
+        return len(self.proxy_bins_i) - 1
+
+@dataclass
 class UnivariateBinning(AbstractRepresentation):
     """TODO: add documentation"""
-    proxy_bins: list[float]
+    proxy_bins: list[float] | list[list[float]]
+
+    def __post_init__(self):
+        if isinstance(self.proxy_bins[0], float):
+            self._binnings = [_SingleUnivariateBinning(self.proxy_bins)]
+        else:
+            self._binnings = [_SingleUnivariateBinning(b) for b in self.proxy_bins]
 
     def fit_transform(self, X, y, sample_weight=None, average=True, n_classes=None):
+        X = np.array(X)
+        if X.ndim != 2 or X.shape[1] != len(self._binnings):
+            raise ValueError("X.shape != (n_samples, n_proxy_variables)")
         check_y(y, n_classes)
         self.p_trn = class_prevalences(y, n_classes)
         n_classes = len(self.p_trn) # not None anymore
-        if self.proxy_bins[0] > -np.inf or self.proxy_bins[-1] < np.inf:
-            raise ValueError("proxy_bins are not defined from -inf to inf")
-
-        # nothing to fit; immediately return the transformed data
         if not average:
             return self.transform(X, average=False)
-        A = np.bincount(
-            n_classes * self._digitize(X) + y, # combined X*y bins
-            weights=sample_weight,
-            minlength=self.n_output_features * n_classes,
-        ).reshape((self.n_output_features, n_classes))
-        return A / A.sum(axis=0, keepdims=True)
+        return np.concatenate([ # concatenate A matrices along the feature dimension
+            b_i.create_A_i(X_i, y, sample_weight, n_classes)
+            for X_i, b_i in zip(X.T, self._binnings)
+        ])
 
     def transform(self, X, sample_weight=None, average=True):
-        X = self._digitize(X)
-        if not average:
-            return np.eye(self.n_output_features)[X] # one-hot encoding
-        g = np.bincount(X, weights=sample_weight, minlength=self.n_output_features)
-        return g / g.sum()
-
-    def _digitize(self, X):
-        return np.digitize(np.asarray(X)[:, 0], self.proxy_bins) - 1
+        return np.concatenate(
+            [
+                b_i.transform_i(X_i, sample_weight, average)
+                for X_i, b_i in zip(X.T, self._binnings)
+            ],
+            axis=0 if average else 1, # concatenate along the respective feature dimension
+        )
 
     @property
     def n_output_features(self):
-        return len(self.proxy_bins) - 1
+        return np.sum([b.n_output_features_i for b in self._binnings])
 
 
 @dataclass

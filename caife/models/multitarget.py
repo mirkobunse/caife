@@ -12,51 +12,40 @@ from .latents import LatentReshape, LatentSpectrum
 class MultiTargetModel(AbstractModel):
     """TODO."""
     target_bins: list[list[float]]
-    representations: list[AbstractRepresentation]
+    representation: AbstractRepresentation
 
     def fit(self, X, Y, sample_weight=None, systematics=None, background=None):
         for b_i in self.target_bins:
             if b_i[0] > -np.inf or b_i[-1] < np.inf:
                 raise ValueError("Not all target_bins are defined from -inf to inf")
-        y = self.represent_targets(Y)
-        self._fit_transfers(X, y, sample_weight, systematics)
+        y = self.represent_targets(Y) # compute a single, joint class label of all targets
+        self._fit_transfer(X, y, sample_weight, systematics)
 
         # store the background distribution
+        n_bins_proxy = self.representation.n_output_features
+        g_background = np.zeros(n_bins_proxy)
         if background is not None:
             if isinstance(background, tuple): # background with weights
-                self.gs_background_ = self.proxy_view(
+                g_background = self.proxy_view(
                     background[0],
                     sample_weight=background[1],
                 )
             else:
-                self.gs_background_ = self.proxy_view(background)
-        else:
-            self.gs_background_ = [jnp.zeros(r.n_output_features) for r in self.representations]
-        return self
+                g_background = self.proxy_view(background)
+        self.g_background_ = jnp.array(g_background)
 
-    def _fit_transfers(self, X, y, sample_weight, systematics):
+        return self # sklearn convention; allows method chaining
+
+    def _fit_transfer(self, X, y, sample_weight, systematics):
         """Fit the transfer models `A[i](s)`."""
         if systematics is not None:
             print("WARNING: MultiTargetModel does not support systematics; chose another model")
-        As = []
-        for i, representation in enumerate(self.representations):
-            A = representation.fit_transform(
-                X[:,[i]],
-                y,
-                sample_weight=sample_weight,
-                n_classes=self.n_bins_multitarget,
-            )
-            As.append(jnp.array(A))
-        self.As_ = As
+        self.A_ = jnp.array(self.representation.fit_transform(
+            X, y, sample_weight=sample_weight, n_classes=self.n_bins_multitarget))
 
-    def proxy_view(self, X, sample_weight=None, separate=True):
-        def create_view(X_i, representation):
-            g = representation.transform(X_i.reshape((-1, 1)), sample_weight=sample_weight)
-            return jnp.array(g * len(X_i)) # scale to counts
-        separate_views = [create_view(X_i, r) for X_i, r in zip(X.T, self.representations)]
-        if separate:
-            return separate_views
-        return jnp.concatenate(separate_views)
+    def proxy_view(self, X, sample_weight=None):
+        g = self.representation.transform(X, sample_weight=sample_weight)
+        return g * len(X) # scale to counts; assume g is scaled to a unit sum
 
     def target_view(self, Y, sample_weight=None):
         f = np.bincount(
@@ -67,7 +56,7 @@ class MultiTargetModel(AbstractModel):
         return f.reshape(self.n_bins_per_target) * (Y.shape[0] / f.sum()) # scale to counts
 
     def represent_targets(self, Y, separate=False):
-        """Represent each individual target through binning."""
+        """Represent all targets jointly (or separately) through binning."""
         if not np.isfinite(Y).all():
             raise ValueError("Y contains nans or infs")
         Y = np.array([
@@ -86,16 +75,16 @@ class MultiTargetModel(AbstractModel):
         )
 
     def __call__(self, f): # f = params with shape tuple(self.n_bins_per_target)
-        g_pred = [A @ f.reshape(-1) + g for A, g in zip(self.As_, self.gs_background_)]
+        g_pred = self.A_ @ f.reshape(-1) + self.g_background_
         return g_pred
 
     @property
     def n_background_samples(self):
-        return self.gs_background_[0].sum()
+        return self.g_background_.sum()
 
     @n_background_samples.setter
     def n_background_samples(self, value):
-        self.gs_background_ = [g * value / g.sum() for g in self.gs_background_]
+        self.g_background_ = self.g_background_ * value / self.g_background_.sum()
 
     @property
     def n_bins_multitarget(self):
