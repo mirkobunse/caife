@@ -2,6 +2,7 @@
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from itertools import compress
 from typing import NamedTuple
 
 import jax
@@ -24,13 +25,36 @@ class LatentResult(NamedTuple):
     aux: dict
 
 
-def is_valid_hessian(hess):
-    """Check whether a Hessian matrix is positive definite, and thereby represents a valid solution."""
-    try: # https://stackoverflow.com/a/44287862/11567260 for a symmetric matrix
-        np.linalg.cholesky(hess)
-        return True
-    except np.linalg.LinAlgError:
-        return False
+def symmetrize_hessian_fn(hess_fn):
+    """Alter a Hessian function to produce a symmetrized version of the Hessian.
+
+    Args:
+        hess_fn: The function computing the Hessian from arbitrary arguments.
+
+    Returns:
+        Another function that computes a symmetrized version of the same Hessian."""
+    def symmetric_hess_fn(*args, **kwargs):
+        hess = hess_fn(*args, **kwargs)
+        return .5 * (hess + hess.T)
+    return symmetric_hess_fn
+
+
+def is_valid_hessian(hess, rtol=1e-8):
+    """Check whether a Hessian matrix is positive definite, and thereby represents a valid solution. In addition, this check computes the condition number to allow for flagging near-invalid solutions.
+
+    Args:
+        hess: The Hessian matrix at the solution, shape (n_parameters, n_parameters).
+        rtol (optional): The tolerance, relative to the largest absolute eigenvalue. This tolerance identifies a near-zero smallest eigenvalue as being compatible with zero, so that the check for positive definiteness is robust against a limited machine precision. Defaults to `1e-8`.
+
+    Returns:
+        A tuple `(is_valid, cond)` consisting of a validity boolean and the condition number.
+    """
+    hess = .5 * (hess + hess.T) # symmetrize to reduce autodiff noise
+    eigvals = np.linalg.eigvalsh(hess) # eigenvalues in ascending order
+    atol = rtol * np.max(np.abs(eigvals)) # some absolute tolerance
+    is_valid = eigvals[0] > atol # the actual check for positive definiteness
+    cond = eigvals[-1] / eigvals[0] if eigvals[0] > 0 else np.inf # extra information
+    return is_valid, cond
 
 
 @dataclass
@@ -87,7 +111,7 @@ class AbstractSolver(ABC):
             return_aux (optional): Whether to return auxiliary information on the solution. This information could include, for instance, the number of iterations or the wall-clock time used for solving. Defaults to `False`.
 
         Returns:
-            A result pytree with the same structure as the given `latent_vectors`. If `return_aux` is `True`, return a pair of this pytree and a `dict` of auxiliary information.
+            A result pytree with the same structure as the given `latent_vectors` or `None` if none of the `n_trials` produced a valid result. If `return_aux` is `True`, return a pair of this result and a `dict` of auxiliary information.
         """
         # create LatentResults
         latent_results = [self.solve_latent(args) for _ in range(self.n_trials)]
@@ -99,10 +123,15 @@ class AbstractSolver(ABC):
                 self.latent_vectors,
                 self.unravel_fn_(ell),
             )
-        results = [unravel_to_target_space(r.ell) for r in latent_results]
+        results = [unravel_to_target_space(l.ell) for l in latent_results]
 
-        # find the best result
-        result = results[np.argmin([r.value for r in latent_results])]
+        # find the best valid result
+        is_valid = [l.is_valid for l in latent_results]
+        if np.sum(is_valid) > 0:
+            result = list(compress(results, is_valid))[
+                np.argmin([l.value for l in compress(latent_results, is_valid)])]
+        else:
+            result = None
         if return_aux:
             aux = {
                 "results": results,

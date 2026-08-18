@@ -6,7 +6,7 @@ import jax.numpy as jnp
 import numpy as np
 from scipy import optimize
 
-from . import AbstractSolver, LatentResult, is_valid_hessian
+from . import AbstractSolver, LatentResult, is_valid_hessian, symmetrize_hessian_fn
 
 """Factory function, without arguments, to create solver options."""
 SOLVER_OPTIONS_FACTORY = lambda: {
@@ -35,9 +35,11 @@ class ScipySolver(AbstractSolver):
         seed (optional): Random number generator seed. Defaults to `None`.
         solver (optional): The `method` argument in `scipy.optimize.minimize`. Defaults to "trust-ncg".
         solver_options (optional): The `options` argument in `scipy.optimize.minimize`. Defaults to `caife.solvers.scipy.SOLVER_OPTIONS_FACTORY()`.
+        rtol (optional): The relative tolerance for validity checks. Defaults to `1e-8`.
     """
     solver: str = "trust-ncg"
     solver_options: dict[str,object] = field(default_factory=SOLVER_OPTIONS_FACTORY)
+    rtol: float = 1e-8
 
     def __post_init__(self):
         AbstractSolver.__post_init__(self)
@@ -45,7 +47,8 @@ class ScipySolver(AbstractSolver):
         # create all derivatives
         self.latent_nll_ = jax.jit(self.latent_nll_)
         self.latent_jac_ = jax.jit(jax.grad(self.latent_nll_))
-        self.latent_hess_ = jax.jit(jax.jacfwd(self.latent_jac_))
+        self.latent_hess_ = jax.jit(
+            symmetrize_hessian_fn(jax.jacfwd(self.latent_jac_)))
 
     def solve_latent(self, args):
         opt = minimize(
@@ -59,11 +62,12 @@ class ScipySolver(AbstractSolver):
             solver_options=self.solver_options,
         )
         hess = opt.get("hess", self.latent_hess_(opt.x, *args))
+        is_valid, cond = is_valid_hessian(hess, rtol=self.rtol)
         return LatentResult(
             ell=opt.x,
-            is_valid=is_valid_hessian(hess),
+            is_valid=is_valid,
             value=opt.get("fun", self.latent_nll_(opt.x, *args)),
-            aux={"opt": opt},
+            aux={"opt": opt, "cond": cond},
         )
 
 
@@ -102,7 +106,7 @@ def minimize(
         jac = jax.jit(jac)
     if solver.lower() in _SECOND_ORDER_SOLVERS:
         if hess is None:
-            hess = jax.jacfwd(jac) # Hessian through forward-mode AD
+            hess = symmetrize_hessian_fn(jax.jacfwd(jac)) # Hessian through forward-mode AD
         if apply_jit:
             hess = jax.jit(hess)
     else:

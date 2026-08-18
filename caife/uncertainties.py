@@ -21,6 +21,7 @@ def uncertainty_from_hessian(result, nll, args=(),):
 
     # compute the joint Hessian across all result components
     joint_hessian = jax.jacfwd(jax.grad(vec_nll))(result_vec, *args)
+    joint_hessian = .5 * (joint_hessian + joint_hessian.T) # symmetrize
 
     # compute the bin-wise errors, just as Minuit does
     errors = np.sqrt(np.diagonal(np.linalg.inv(np.sqrt(.5) * joint_hessian)))

@@ -24,6 +24,7 @@ def global_correlation_coefficients(result, nll, args=(), ignore_overflow_bins=T
 
     # compute the joint Hessian across all result components
     joint_hessian = jax.jacfwd(jax.grad(vec_nll))(result_vec, *args)
+    joint_hessian = .5 * (joint_hessian + joint_hessian.T) # symmetrize
     joint_hessian = np.sqrt(.5) * joint_hessian # apply Minuit's scaling
 
     # split the joint Hessian into component-wise sub-Hessians
@@ -82,6 +83,7 @@ def pairwise_correlation_scores(result, nll, args=(), ignore_overflow_bins=True)
 
     # compute the joint Hessian across all result components
     joint_hessian = jax.jacfwd(jax.grad(vec_nll))(result_vec, *args)
+    joint_hessian = .5 * (joint_hessian + joint_hessian.T) # symmetrize
 
     # compute the covariance / error matrix, as in Minuit, and derive the correlation
     joint_cov = np.linalg.inv(np.sqrt(.5) * joint_hessian)
