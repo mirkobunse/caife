@@ -41,6 +41,7 @@ from .models.linear import (
 
 from .models.multitarget import (
     MultiTargetModel,
+    MultiTargetSystematicsModel,
 )
 
 from .solvers import (
