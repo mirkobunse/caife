@@ -127,13 +127,15 @@ class AbstractSolver(ABC):
 
         # find the best valid result
         is_valid = [l.is_valid for l in latent_results]
+        result = None
+        aux = {}
         if np.sum(is_valid) > 0:
             result = list(compress(results, is_valid))[
                 np.argmin([l.value for l in compress(latent_results, is_valid)])]
-        else:
-            result = None
+            aux = list(compress(latent_results, is_valid))[
+                np.argmin([l.value for l in compress(latent_results, is_valid)])].aux
         if return_aux:
-            aux = {
+            aux = aux | { # update aux
                 "results": results,
                 "latent_results": latent_results,
             }
