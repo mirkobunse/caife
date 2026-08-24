@@ -102,14 +102,12 @@ class MultiTargetModel(AbstractModel):
 @dataclass
 class MultiTargetSystematicsModel(MultiTargetModel):
     """TODO."""
+    C: float | None = None
     solver: str = "L-BFGS-B" # same as in sklearn's LogisticRegression
     solver_options: dict[str,object] = field(default_factory=lambda: {
         "gtol": 1e-8,
         "maxiter": 100,
     })
-    max_rank: int | None = None
-    min_samples_per_transfer_bin: int = 1
-    seed: int | None = 0
 
     def _fit_transfer(self, X, y, sample_weight=None, systematics=None):
         if systematics is None:
@@ -136,10 +134,13 @@ class MultiTargetSystematicsModel(MultiTargetModel):
             axis=1,
         )
         target_mask = jax.nn.one_hot(y, self.n_bins_multitarget)
-
-        # handle masking and weighting
-        self.A_mask = jnp.einsum( # check where the full matrix is sufficiently populated
-            "np,nt->pt", X, target_mask) >= self.min_samples_per_transfer_bin
+        coeffs_shape = (
+            X.shape[1], # = p = n_bins_proxy
+            self.n_bins_multitarget, # = t = n_bins_multitarget
+            systematics.shape[1], # = s = n_systematic_params
+        )
+        self.A_mask = jnp.einsum( # check where the full matrix is > 0
+            "np,nt,n->pt", X, target_mask, sample_weight) > 0
         if sample_weight is None:
             sample_weight = np.ones(len(y))
         class_weight = jnp.sum( # normalize weights per class to unit sum
@@ -147,33 +148,12 @@ class MultiTargetSystematicsModel(MultiTargetModel):
             axis=0,
         )
         sample_weight = sample_weight / class_weight[y]
-
-        # decompose coeffs = trunk @ heads
-        rank = systematics.shape[1]
-        if self.max_rank is not None and self.max_rank < rank:
-            rank = self.max_rank
-        trunk_shape = (
-            rank, # = r
-            systematics.shape[1], # = s = n_systematic_params
-        )
-        heads_shape = (
-            X.shape[1], # = p = n_bins_proxy
-            self.n_bins_multitarget, # = t = n_bins_multitarget
-            rank, # = r
-        )
-        x0, unravel_fn = jax.flatten_util.ravel_pytree([
-            np.random.default_rng(self.seed).normal( # initial guess for the trunk
-                scale=1/systematics.shape[1], size=trunk_shape),
-            np.zeros(heads_shape), # initial guess for the heads
-        ])
-        def loss_fn(params):
-            trunk, heads = unravel_fn(params)
+        def loss_fn(coeffs):
             loss = jnp.average(
                 softmax_cross_entropy(
                     jnp.einsum( # compute logits for each sample
-                        "rs,ptr,ns,nt->np", # n = n_samples
-                        trunk, # shape (r, s), see above
-                        heads, # shape (p, t, r), see above
+                        "pts,ns,nt->np", # n = n_samples; for others, see coeffs_shape
+                        coeffs.reshape(coeffs_shape), # shape (p, t, s)
                         systematics, # shape (n, s)
                         target_mask, # shape (n, t)
                     ),
@@ -181,25 +161,22 @@ class MultiTargetSystematicsModel(MultiTargetModel):
                 ),
                 weights=sample_weight,
             )
+            if self.C is not None: # regularize
+                return loss + coeffs @ coeffs / (2 * self.C * len(X))
             return loss
         t_init = time.time()
         self.opt_ = minimize(
             loss_fn,
-            x0=x0,
+            x0=jnp.zeros(coeffs_shape).reshape(-1), # initial guess: all zeros
             solver=self.solver,
             solver_options=self.solver_options,
         )
         self.opt_.wallclock_time = time.time() - t_init
-        self.trunk_, self.heads_ = unravel_fn(self.opt_.x) # optimized coefficients
+        self.coeffs_ = self.opt_.x.reshape(coeffs_shape) # optimized coefficients
 
     def A(self, s):
         return jax.nn.softmax( # p=n_bins_proxy, t=n_bins_multitarget, s=n_systematic_params
-            jnp.einsum(
-                "rs,ptr,s->pt",
-                self.trunk_,
-                self.heads_,
-                jnp.concatenate((s, jnp.ones(1)))
-            ),
+            jnp.einsum("pts,s->pt", self.coeffs_, jnp.concatenate((s, jnp.ones(1)))),
             axis=0, # for each target bin, apply softmax over all proxy bins
             where=self.A_mask,
         )
