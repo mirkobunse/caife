@@ -1,5 +1,7 @@
 """Module containing common loss functions."""
 
+from __future__ import annotations
+
 import operator
 from functools import partial
 

@@ -1,8 +1,10 @@
-import caife
-import numpy as np
 import unittest
 from dataclasses import dataclass
 from unittest import TestCase
+
+import numpy as np
+
+import caife
 
 
 @dataclass

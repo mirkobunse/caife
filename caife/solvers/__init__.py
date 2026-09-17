@@ -1,12 +1,13 @@
 """Module containing solvers of unfolding equations."""
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from itertools import compress
 from typing import NamedTuple
 
 import jax
-import jax.numpy as jnp
 import numpy as np
 
 

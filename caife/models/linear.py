@@ -1,5 +1,7 @@
 """Module containing linear models of the measurement process."""
 
+from __future__ import annotations
+
 import time
 from dataclasses import dataclass, field
 

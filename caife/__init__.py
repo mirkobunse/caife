@@ -1,4 +1,4 @@
-__version__ = "0.0.4-rc2"
+__version__ = "0.0.4-rc3"
 
 # necessary for successful scipy.minimize
 from jax import config
