@@ -131,10 +131,10 @@ class AbstractSolver(ABC):
         result = None
         aux = {}
         if np.sum(is_valid) > 0:
-            result = list(compress(results, is_valid))[
-                np.argmin([l.value for l in compress(latent_results, is_valid)])]
-            aux = list(compress(latent_results, is_valid))[
-                np.argmin([l.value for l in compress(latent_results, is_valid)])].aux
+            i_best = np.argmin([l.value for l in compress(latent_results, is_valid)])
+            result = list(compress(results, is_valid))[i_best]
+            ell = list(compress(latent_results, is_valid))[i_best].ell
+            aux = list(compress(latent_results, is_valid))[i_best].aux | {"ell": ell}
         if return_aux:
             aux = aux | { # update aux
                 "results": results,

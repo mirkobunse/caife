@@ -67,7 +67,7 @@ class ScipySolver(AbstractSolver):
             ell=opt.x,
             is_valid=is_valid,
             value=opt.get("fun", self.latent_nll_(opt.x, *args)),
-            aux={"opt": opt, "cond": cond},
+            aux={"opt": opt, "cond": cond, "hess": hess},
         )
 
 
