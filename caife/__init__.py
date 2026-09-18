@@ -1,4 +1,4 @@
-__version__ = "0.0.4-rc3"
+__version__ = "0.0.4-rc4"
 
 # necessary for successful scipy.minimize
 from jax import config
@@ -62,4 +62,5 @@ from .evaluation import (
 
 from .uncertainties import (
     uncertainty_from_hessian,
+    uncertainty_from_aux,
 )
