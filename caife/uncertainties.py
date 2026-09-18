@@ -47,8 +47,8 @@ def uncertainty_from_aux(aux, n_samples=10_000, rng=None):
         size=n_samples,
     )
     results = [aux["unravel_fn"](ell) for ell in ells] # map to target spaces
-    results = jax.tree_util.tree_map( # list of pytrees -> pytree of lists
-        lambda *leaves: list(leaves), *results)
+    results = jax.tree_util.tree_map( # list of pytrees -> pytree of arrays
+        lambda *leaves: np.array(leaves), *results)
     lower = jax.tree_util.tree_map( # -1 sigma
         lambda leaf: np.percentile(leaf, 16, axis=0), results)
     upper = jax.tree_util.tree_map( # +1 sigma
