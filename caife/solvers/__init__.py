@@ -139,6 +139,7 @@ class AbstractSolver(ABC):
             aux = aux | { # update aux
                 "results": results,
                 "latent_results": latent_results,
+                "unravel_fn": unravel_to_target_space,
             }
             return result, aux
         else:

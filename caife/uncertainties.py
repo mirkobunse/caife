@@ -26,3 +26,31 @@ def uncertainty_from_hessian(result, nll, args=(),):
     # compute the bin-wise errors, just as Minuit does
     errors = np.sqrt(np.diagonal(np.linalg.inv(np.sqrt(.5) * joint_hessian)))
     return unravel_fn(errors)
+
+
+def uncertainty_from_aux(aux, n_samples=10_000, rng=None):
+    """Estimate statistical uncertainties through sampling in the latent space.
+
+    Args:
+        aux: A dict of auxiliary information from the optimizer. Must contain keys `ell`, `hess`, and `unravel_fn`.
+        n_samples (optional): The number fo samples to generate in the latent space. Defaults to `10_000`.
+        rng (optional): The random number generator. Defaults to `None`.
+
+    Returns:
+        A pair of JAX pytrees, one corresponding to all lower bounds and one corresponding to all upper bounds of the results within one standard deviation.
+    """
+    if rng is None:
+        rng = np.random.default_rng()
+    ells = rng.multivariate_normal( # samples in latent space
+        aux["ell"], # mean
+        np.linalg.inv(aux["hess"]), # covariance matrix
+        size=n_samples,
+    )
+    results = [aux["unravel_fn"](ell) for ell in ells] # map to target spaces
+    results = jax.tree_util.tree_map( # list of pytrees -> pytree of lists
+        lambda *leaves: list(leaves), *results)
+    lower = jax.tree_util.tree_map( # -1 sigma
+        lambda leaf: np.percentile(leaf, 16, axis=0), results)
+    upper = jax.tree_util.tree_map( # +1 sigma
+        lambda leaf: np.percentile(leaf, 84, axis=0), results)
+    return lower, upper
