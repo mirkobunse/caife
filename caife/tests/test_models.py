@@ -4,7 +4,6 @@ from unittest import TestCase
 import numpy as np
 
 import caife
-from caife.models.collections import SystematicBinCollection
 
 
 class TestLinearCountModel(TestCase):
@@ -48,43 +47,6 @@ class TestLinearCountModel(TestCase):
             )
         model.fit(X, y)
         self.assertEqual(model.A_.shape, (6, 4))
-
-
-class TestSystematicBinCollection(TestCase):
-    def test_create_bin_indices(self):
-        rng = np.random.default_rng(1491)
-        for n_systematics in range(1, 6):
-            systematics = rng.uniform(size=(10_000, n_systematics))
-            for n_bins_per_systematic in range(2, 6):
-
-                # test create_systematic_bins
-                systematic_bins = SystematicBinCollection.create_systematic_bins(
-                    systematics,
-                    n_bins_per_systematic,
-                )
-                self.assertEqual(
-                    systematic_bins.shape,
-                    (n_systematics, n_bins_per_systematic+1),
-                )
-                np.testing.assert_equal(systematic_bins[:,0], -np.inf)
-                np.testing.assert_equal(systematic_bins[:,-1], np.inf)
-
-                # test create_bin_indices
-                bin_indices = SystematicBinCollection.create_bin_indices(
-                    systematics,
-                    systematic_bins
-                )
-                self.assertEqual(
-                    len(bin_indices),
-                    n_bins_per_systematic ** n_systematics,
-                )
-
-                # check that every sample occurs exactly once
-                n_sampled = np.zeros(len(systematics), dtype=int)
-                for is_in_bin in bin_indices.values():
-                    n_sampled[is_in_bin] += 1
-                self.assertEqual(n_sampled.min(), 1)
-                self.assertEqual(n_sampled.max(), 1)
 
 
 class TestMultiTargetModel(TestCase):
