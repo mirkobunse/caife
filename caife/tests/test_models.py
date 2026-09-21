@@ -97,15 +97,13 @@ class TestMultiTargetModel(TestCase):
         )).T
 
         # assert that target_bins are required to range from -inf to inf
-        representations = [
-            caife.UnivariateBinning(
-                proxy_bins=np.concatenate(([-np.inf], np.arange(5), [np.inf]))),
-            caife.UnivariateBinning(
-                proxy_bins=np.concatenate(([-np.inf], np.arange(3), [np.inf]))),
-        ]
+        representation = caife.GridBinning([
+            np.concatenate(([-np.inf], np.arange(5), [np.inf])),
+            np.concatenate(([-np.inf], np.arange(3), [np.inf])),
+        ])
         erroring_model = caife.MultiTargetModel(
             target_bins=[np.arange(5), np.arange(3)], # not ranging from -inf to inf
-            representations=representations,
+            representation=representation,
         )
         self.assertRaises( # erroring_model.fit(X, y) raises a ValueError
             ValueError,
@@ -124,7 +122,7 @@ class TestMultiTargetModel(TestCase):
             b_i[-1] = np.inf
         model = caife.MultiTargetModel(
             target_bins=target_bins,
-            representations=representations,
+            representation=representation,
         )
         self.assertEqual(model.represent_targets(Y).min(), 0)
         self.assertEqual(model.represent_targets(Y).max(), 7)
@@ -135,19 +133,15 @@ class TestMultiTargetModel(TestCase):
                 [ value ], # *args
             )
         model.fit(X, Y)
-        for A_i, representation in zip(model.As_, representations):
-            self.assertEqual(A_i.shape, (representation.n_output_features, 8))
-        self.assertEqual(model.n_bins_multitarget, 8)
-        np.testing.assert_equal(model.n_bins_per_target, [4, 2])
 
         # instantiate standard models as a reference
         model_a = caife.LinearCountModel(
             target_bins=target_bins[0],
-            representation=representations[0],
+            representation=caife.UnivariateBinning(representation.proxy_bins[0]),
         )
         model_b = caife.LinearCountModel(
             target_bins=target_bins[1],
-            representation=representations[1],
+            representation=caife.UnivariateBinning(representation.proxy_bins[1]),
         )
 
         # check for equivalence in target and proxy views
@@ -160,11 +154,17 @@ class TestMultiTargetModel(TestCase):
             model_b.represent_target(Y[:,1]),
         )
         np.testing.assert_equal(
-            model.proxy_view(X)[0],
+            caife.MultiTargetModel(
+                target_bins=target_bins,
+                representation=caife.GridBinning([representation.proxy_bins[0]]),
+            ).fit(X[:,[0]], Y).proxy_view(X[:,[0]]),
             model_a.proxy_view(X[:,[0]]),
         )
         np.testing.assert_equal(
-            model.proxy_view(X)[1],
+            caife.MultiTargetModel(
+                target_bins=target_bins,
+                representation=caife.GridBinning([representation.proxy_bins[1]]),
+            ).fit(X[:,[1]], Y).proxy_view(X[:,[1]]),
             model_b.proxy_view(X[:,[1]]),
         )
         y_a = model_a.represent_target(Y[:,0])

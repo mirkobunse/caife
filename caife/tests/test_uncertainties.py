@@ -1,9 +1,11 @@
-import caife
+import unittest
+from unittest import TestCase
+
 import jax
 import numpy as np
-import unittest
 from jax import numpy as jnp
-from unittest import TestCase
+
+import caife
 
 
 class TestEvaluation(TestCase):

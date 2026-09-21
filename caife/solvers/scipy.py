@@ -1,8 +1,9 @@
+from __future__ import annotations
+
 import traceback
 from dataclasses import dataclass, field
 
 import jax
-import jax.numpy as jnp
 import numpy as np
 from scipy import optimize
 
@@ -147,7 +148,7 @@ def _check_derivative_at_x(jac_or_hess, name, x, args):
         raise DerivativeError(name, result)
     return result
 
-class _CallbackState():
+class _CallbackState:
     def __init__(self, x0):
         self._xk = x0
         self._nit = 0

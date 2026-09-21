@@ -1,5 +1,6 @@
 import unittest
 from dataclasses import dataclass
+from functools import partial
 from unittest import TestCase
 
 import numpy as np
@@ -29,6 +30,14 @@ class _Solver(caife.solvers.AbstractSolver):
 
 class TestAbstractSolver(TestCase):
     def test_solve(self):
+
+        def nll(projected_components, result_components):
+            np.testing.assert_equal(
+                projected_components,
+                tuple(x + 1 for x in result_components),
+            )
+            return np.array(-1)
+
         rng = np.random.default_rng(0)
         for i_trial in range(5):
             if i_trial == 0:
@@ -40,13 +49,10 @@ class TestAbstractSolver(TestCase):
             # test that solve_latent receives the right inputs
             result_components = tuple(rng.random(l) for l in component_lengths)
             latent_vectors = [_LatentVector(x) for x in result_components]
-            def nll(projected_components):
-                np.testing.assert_equal(
-                    projected_components,
-                    tuple(x + 1 for x in result_components),
-                )
-                return np.array(-1)
-            _, aux = _Solver(nll, latent_vectors).solve(return_aux=True)
+            _, aux = _Solver(
+                partial(nll, result_components=result_components),
+                latent_vectors
+            ).solve(return_aux=True)
             for latent_result in aux["latent_results"]:
                 self.assertEqual(latent_result.value, -1)
                 self.assertEqual(latent_result.aux, {"value": -1})

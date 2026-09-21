@@ -1,10 +1,13 @@
-import caife
-import numpy as np
-from sklearn.tree import DecisionTreeClassifier
-from sklearn.datasets import make_classification
-from unittest import TestCase
 import unittest
+from unittest import TestCase
+
+import numpy as np
 from qunfold import TikhonovRegularization
+from sklearn.datasets import make_classification
+from sklearn.tree import DecisionTreeClassifier
+
+import caife
+
 
 class TestTikhonovRegularization(TestCase):
     def test_tikhonov(self):

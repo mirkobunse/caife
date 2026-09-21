@@ -21,7 +21,6 @@ class AbstractLatentVector(ABC):
         Returns:
             A vector in the target space, shape (target_dim,).
         """
-        pass
 
     @abstractmethod
     def create_starting_point(self, rng=None):
@@ -31,8 +30,8 @@ class AbstractLatentVector(ABC):
             rng (optional): Random number generator.
 
         Returns:
-            An initial vector in the latent space, shape (latent_dim,)."""
-        pass
+            An initial vector in the latent space, shape (latent_dim,).
+        """
 
 
 @dataclass

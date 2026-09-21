@@ -22,7 +22,6 @@ class AbstractModel(ABC):
         Returns:
             This model's itself.
         """
-        pass
 
     @abstractmethod
     def proxy_view(self, X, sample_weight=None):
@@ -35,7 +34,6 @@ class AbstractModel(ABC):
         Returns:
             The model's view of the proxy distribution.
         """
-        pass
 
     @abstractmethod
     def target_view(self, y, sample_weight=None):
@@ -48,7 +46,6 @@ class AbstractModel(ABC):
         Returns:
             The model's view of the target distribution.
         """
-        pass
 
     @abstractmethod
     def create_latents(self, X):
@@ -60,7 +57,6 @@ class AbstractModel(ABC):
         Returns:
             A JAX pytree of `AbstractLatentVector` instances with the same structure that calling this model requires for the `params` argument.
         """
-        pass
 
     @abstractmethod
     def __call__(self, params):
@@ -72,7 +68,6 @@ class AbstractModel(ABC):
         Returns:
             The predicted proxy distribution `g` of shape `(n_bins_proxy,)` that the model predicts for the given `params`.
         """
-        pass
 
 
 def create_mixture_model_fn(models):

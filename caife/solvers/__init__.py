@@ -158,4 +158,3 @@ class AbstractSolver(ABC):
         Note:
             Implementations of this abstract method should minimize `self.latent_nll_` starting from `self.create_starting_vector()`. These class members represent the negative log-likelihood function that takes only a single combined latent vector as an argument and the single combined starting point in latent space.
         """
-        pass
