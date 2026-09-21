@@ -41,9 +41,11 @@ def uncertainty_from_aux(aux, n_samples=10_000, rng=None):
     """
     if rng is None:
         rng = np.random.default_rng()
+    covar = np.linalg.inv(aux["hess"]) # covariance matrix
+    covar = .5 * (covar + covar.T) # symmetrize
     ells = rng.multivariate_normal( # samples in latent space
         aux["ell"], # mean
-        np.linalg.inv(aux["hess"]), # covariance matrix
+        covar,
         size=n_samples,
     )
     results = [aux["unravel_fn"](ell) for ell in ells] # map to target spaces
