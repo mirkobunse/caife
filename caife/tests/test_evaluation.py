@@ -95,6 +95,29 @@ class TestEvaluation(TestCase):
             self.assertTrue(jax.tree.all(jax.tree.map(lambda x: x==0, pcss)))
             self.assertEqual(jax.tree.structure(pcss), jax.tree.structure(result_dict))
 
+        # regression test: sub-correlation blocks must be distinguished; a bug
+        # computed each score from the fill joint correlation matrix
+        r_a, r_b = 0.0, 0.6 # a has independent bins, b has a correlated pair
+        def nll(x_tuple):
+            a, b = x_tuple
+            return (
+                .5 * jnp.sum(a**2) + r_a * a[1] * a[2]
+                + .5 * jnp.sum(b**2) + r_b * b[1] * b[2]
+            )
+        result = (jnp.array([.1, .2, .3, .4]), jnp.array([.4, .3, .2, .1]))
+
+        # without overflow, only 2*2 bins remain, so the score reduces to |r| / 4
+        pcs_a, pcs_b = caife.pairwise_correlation_scores(result, nll)
+        self.assertAlmostEqual(pcs_a, abs(r_a) / 4)
+        self.assertAlmostEqual(pcs_b, abs(r_b) / 4)
+        self.assertNotAlmostEqual(pcs_a, pcs_b) # the two components must not collapse
+
+        # without overflow, there are 4*4 bins, so the score reduces to |r| / 16
+        pcs_a, pcs_b = caife.pairwise_correlation_scores(result, nll, ignore_overflow_bins=False)
+        self.assertAlmostEqual(pcs_a, abs(r_a) / 16)
+        self.assertAlmostEqual(pcs_b, abs(r_b) / 16)
+        self.assertNotAlmostEqual(pcs_a, pcs_b)
+
 
 if __name__ == '__main__':
     unittest.main()
