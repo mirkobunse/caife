@@ -1,6 +1,13 @@
 """Module providing synthetic toy data for use in examples and tests."""
 
 import numpy as np
+from scipy.stats import norm
+
+# the fixed ground-truth mixture from which `y` is drawn; shared with
+# `create_effective_area`, which needs to know this same shape
+_MIXTURE_WEIGHTS = np.array([0.6, 0.4])
+_MIXTURE_MEANS = np.array([-2.0, 3.0])
+_MIXTURE_STDS = np.array([0.8, 1.2])
 
 
 def create_data(n_samples=200_000, rng=None):
@@ -22,13 +29,10 @@ def create_data(n_samples=200_000, rng=None):
         `(n_samples, 1)` and `y` and `w` have shape `(n_samples,)`.
     """
     rng = np.random.default_rng(rng)
-    mixture_weights = np.array([0.6, 0.4])
-    mixture_means = np.array([-2.0, 3.0])
-    mixture_stds = np.array([0.8, 1.2])
 
     # y: a fixed two-component Gaussian mixture
-    component = rng.choice(len(mixture_weights), size=n_samples, p=mixture_weights)
-    y = rng.normal(mixture_means[component], mixture_stds[component])
+    component = rng.choice(len(_MIXTURE_WEIGHTS), size=n_samples, p=_MIXTURE_WEIGHTS)
+    y = rng.normal(_MIXTURE_MEANS[component], _MIXTURE_STDS[component])
 
     # S: a systematic parameter, independent of y, uniform over a fixed range
     S = rng.uniform(-1.0, 1.0, size=(n_samples, 1))
@@ -46,7 +50,7 @@ def create_data(n_samples=200_000, rng=None):
 
     # w: random weights with a slight, monotonic dependence on y
     w_y_dependence = 0.05
-    y_ref = mixture_weights @ mixture_means # the mixture's true mean
+    y_ref = _MIXTURE_WEIGHTS @ _MIXTURE_MEANS # the mixture's true mean
     w = rng.uniform(0.5, 1.5, size=n_samples) * (1 + w_y_dependence * (y - y_ref))
     w = np.clip(w, 1e-3, None) # keep weights strictly positive, even for extreme outliers
 
@@ -82,3 +86,39 @@ def split_data(X, y, w, S, rng=None):
     X_tst, y_tst = X_tst[i_bootstrap], y_tst[i_bootstrap]
 
     return (X_trn, y_trn, w_trn, S_trn), (X_tst, y_tst)
+
+
+def create_effective_areas(target_bins, slope=-0.5):
+    """Create effective areas that turn the mixture's shape log-linear.
+
+    `create_data`'s target `y` follows a two-component Gaussian mixture, whose
+    double-peak shape is not log-linear in its own right. This function
+    computes, for each inner bin of `target_bins`, an effective area `a_eff`
+    such that `log(f_true / a_eff)` is an exact linear function of the bin
+    index, where `f_true` is the mixture's true probability mass in that bin.
+    Dividing an empirical spectrum by `a_eff` before regularizing its
+    logarithm, as `caife`'s example notebooks do, then matches the log-linear
+    prior that Tikhonov regularization implicitly imposes; for a spectrum
+    drawn from `create_data`, `log(f / a_eff)` is only approximately linear,
+    since sampling introduces some noise around the true mixture shape.
+
+    Args:
+        target_bins: The target bin boundaries, ranging from `-inf` to `inf`,
+            as used elsewhere in `caife`. Only the inner boundaries (i.e.,
+            excluding the two overflow bins) are used here.
+        slope (optional): The slope of `log(f_true / a_eff)` over the bin
+            index. Defaults to `-0.5`.
+
+    Returns:
+        An array of effective areas, one for each inner bin of `target_bins`
+        (i.e., of length `len(target_bins) - 3`).
+    """
+    edges = np.asarray(target_bins)[1:-1] # inner boundaries, excluding -inf and inf
+    cdf = sum(
+        weight_k * norm.cdf(edges, mean_k, std_k)
+        for weight_k, mean_k, std_k in zip(_MIXTURE_WEIGHTS, _MIXTURE_MEANS, _MIXTURE_STDS)
+    )
+    f_true = np.diff(cdf) # the mixture's true probability mass per inner bin
+
+    i = np.arange(len(f_true))
+    return f_true / np.exp(slope * i)
