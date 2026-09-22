@@ -106,16 +106,16 @@ class TestEvaluation(TestCase):
             )
         result = (jnp.array([.1, .2, .3, .4]), jnp.array([.4, .3, .2, .1]))
 
-        # without overflow, only 2*2 bins remain, so the score reduces to |r| / 4
+        # no overflow: 2*2 bins = one off-diagonal, so the score equals |r|
         pcs_a, pcs_b = caife.pairwise_correlation_scores(result, nll)
-        self.assertAlmostEqual(pcs_a, abs(r_a) / 4)
-        self.assertAlmostEqual(pcs_b, abs(r_b) / 4)
+        self.assertAlmostEqual(pcs_a, abs(r_a))
+        self.assertAlmostEqual(pcs_b, abs(r_b))
         self.assertNotAlmostEqual(pcs_a, pcs_b) # the two components must not collapse
 
-        # without overflow, there are 4*4 bins, so the score reduces to |r| / 16
+        # with overflow: 4*4 bins = 6 off-diagonals, so the score is |r| / 6
         pcs_a, pcs_b = caife.pairwise_correlation_scores(result, nll, ignore_overflow_bins=False)
-        self.assertAlmostEqual(pcs_a, abs(r_a) / 16)
-        self.assertAlmostEqual(pcs_b, abs(r_b) / 16)
+        self.assertAlmostEqual(pcs_a, abs(r_a) / 6)
+        self.assertAlmostEqual(pcs_b, abs(r_b) / 6)
         self.assertNotAlmostEqual(pcs_a, pcs_b)
 
 

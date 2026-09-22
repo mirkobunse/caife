@@ -110,7 +110,8 @@ def pairwise_correlation_scores(result, nll, args=(), ignore_overflow_bins=True)
     def pcs_fn(sub_corr, ignore_overflow_bins):
         if ignore_overflow_bins:
             sub_corr = sub_corr[1:-1, 1:-1]
-        return np.mean(np.abs(np.triu(sub_corr, k=1))) # average off-diagonal
+        return np.mean(np.abs( # average off-diagonal correlation
+            sub_corr[np.triu_indices(sub_corr.shape[0], k=1)]))
     if isinstance(ignore_overflow_bins, bool):
         ignore_overflow_bins = jax.tree.unflatten( # repeat across tree structure
             treedef,
