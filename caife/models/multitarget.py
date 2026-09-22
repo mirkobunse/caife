@@ -20,11 +20,11 @@ class MultiTargetModel(AbstractModel):
     target_bins: list[list[float]]
     representation: AbstractRepresentation
 
-    def fit(self, X, Y, sample_weight=None, systematics=None, background=None):
+    def fit(self, X, y, sample_weight=None, systematics=None, background=None):
         for b_i in self.target_bins:
             if b_i[0] > -np.inf or b_i[-1] < np.inf:
                 raise ValueError("Not all target_bins are defined from -inf to inf")
-        y = self.represent_targets(Y) # compute a single, joint class label of all targets
+        y = self.represent_targets(y) # compute a single, joint class label of all targets
         self._fit_transfer(X, y, sample_weight, systematics)
 
         # store the background distribution
@@ -53,26 +53,26 @@ class MultiTargetModel(AbstractModel):
         g = self.representation.transform(X, sample_weight=sample_weight)
         return g * len(X) # scale to counts; assume g is scaled to a unit sum
 
-    def target_view(self, Y, sample_weight=None):
+    def target_view(self, y, sample_weight=None):
         f = np.bincount(
-            self.represent_targets(Y),
+            self.represent_targets(y),
             weights=sample_weight,
             minlength=self.n_bins_multitarget,
         )
-        return f.reshape(self.n_bins_per_target) * (Y.shape[0] / f.sum()) # scale to counts
+        return f.reshape(self.n_bins_per_target) * (y.shape[0] / f.sum()) # scale to counts
 
-    def represent_targets(self, Y, separate=False):
+    def represent_targets(self, y, separate=False):
         """Represent all targets jointly (or separately) through binning."""
-        if not np.isfinite(Y).all():
-            raise ValueError("Y contains nans or infs")
-        Y = np.array([
-            np.digitize(Y_i, b_i) - 1
-            for Y_i, b_i in zip(Y.T, self.target_bins)
+        if not np.isfinite(y).all():
+            raise ValueError("y contains nans or infs")
+        y = np.array([
+            np.digitize(y_i, b_i) - 1
+            for y_i, b_i in zip(y.T, self.target_bins)
         ]).T # shape (n_samples, n_targets)
         if separate:
-            return Y
+            return y
         factors = np.concatenate(([1], np.cumprod(self.n_bins_per_target[::-1][:-1])))
-        return np.sum(Y[:,::-1] * factors, axis=1)
+        return np.sum(y[:,::-1] * factors, axis=1)
 
     def create_latents(self, X): # create a single latent such that params = f
         return LatentReshape(
