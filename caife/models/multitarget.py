@@ -16,7 +16,21 @@ from .latents import LatentReshape, LatentSpectrum, LatentSystematics
 
 @dataclass
 class MultiTargetModel(AbstractModel):
-    """TODO."""
+    """Linear model for solving `g = A @ f + b`, where `f` is a multi-dimensional count histogram.
+
+    The `MultiTargetModel` generalizes the `LinearCountModel` to several target quantities at once. Each target quantity is discretized independently, according to its own bin boundaries in `target_bins`, and the resulting per-quantity bins are combined into a single joint class label, in the same way as `GridBinning` combines several proxy features. The target spectrum `f` therefore has shape `tuple(n_bins_per_target)`, a multi-dimensional count histogram over all target quantities jointly.
+
+    This model does not consider any systematic parameters; use `MultiTargetSystematicsModel` if `systematics` need to be modeled.
+
+    Args:
+        target_bins: A list of bin boundary vectors, one vector per target quantity, each ranging from `-inf` to `inf`.
+        representation: The data representation that is computed from the proxy features.
+
+    Attributes:
+        n_background_samples: Number of background samples, set during `fit` but meant to be manually changed to the actual number of background samples after fitting.
+        n_bins_multitarget: The total number of joint target bins, i.e., the product of `n_bins_per_target`.
+        n_bins_per_target: The number of bins of each individual target quantity, as determined by `target_bins`.
+    """
     target_bins: list[list[float]]
     representation: AbstractRepresentation
 
@@ -103,7 +117,22 @@ class MultiTargetModel(AbstractModel):
 
 @dataclass
 class MultiTargetSystematicsModel(MultiTargetModel):
-    """TODO."""
+    """Systematics-aware `MultiTargetModel`, solving `g = A(s) @ f + b` over a joint, multi-dimensional target spectrum `f` and a vector of systematic parameters `s`.
+
+    As in `LinearSystematicsCountModel`, each column of `A(s)` (representing the mean feature embedding of one joint target bin) is modeled as one logistic regression that takes `s` as its input, so that each column stays properly normalized to a unit sum and varies monotonically with each entry of `s`. As in `MultiTargetModel`, the target quantities are first combined into a single joint class label, over which this logistic regression is fitted, so that `A(s)` has shape `(n_bins_proxy, n_bins_multitarget)` and `f` has shape `tuple(n_bins_per_target)`.
+
+    Args:
+        target_bins: A list of bin boundaries, one list per target quantity, each ranging from `-inf` to `inf`.
+        representation: The data representation that is computed from the proxy features.
+        C (optional): The regularization strength for each logistic regression model, with the behavior defined by scikit-learn. Defaults to `None` for no regularization.
+        solver (optional): The `method` argument in `scipy.optimize.minimize`. Defaults to `"L-BFGS-B"`.
+        solver_options (optional): The `options` argument in `scipy.optimize.minimize`. Defaults to `{"gtol": 1e-8, "maxiter": 100}`.
+
+    Attributes:
+        n_background_samples: Number of background samples, set during `fit` but meant to be manually changed to the actual number of background samples after fitting.
+        n_bins_multitarget: The total number of joint target bins, i.e., the product of `n_bins_per_target`.
+        n_bins_per_target: The number of bins of each individual target quantity, as determined by `target_bins`.
+    """
     C: float | None = None
     solver: str = "L-BFGS-B" # same as in sklearn's LogisticRegression
     solver_options: dict[str,object] = field(default_factory=lambda: {

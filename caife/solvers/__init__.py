@@ -98,7 +98,11 @@ class AbstractSolver(ABC):
         self.latent_nll_ = latent_nll
 
     def create_starting_vector(self):
-        """TODO."""
+        """Create a starting vector for a new random trial, in latent space.
+
+        Returns:
+            A single vector `ell` that concatenates a random starting point from each latent vector in `self.latent_vectors`, generated using `self._rng`. Implementations of `solve_latent` should minimize `self.latent_nll_` starting from this vector.
+        """
         return jax.flatten_util.ravel_pytree(jax.tree.map(
             lambda x: x.create_starting_point(self._rng),
             self.latent_vectors,

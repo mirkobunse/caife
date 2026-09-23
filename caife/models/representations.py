@@ -12,7 +12,14 @@ from qunfold.methods import check_y, class_prevalences
 
 @dataclass
 class TreeBinning(AbstractRepresentation):
-    """TODO: add documentation"""
+    """A proxy representation that partitions the feature space according to the leaves of a decision tree.
+
+    A `TreeBinning` uses a (typically shallow) decision tree classifier to discretize the proxy features `X` into bins: each leaf of the tree becomes one proxy bin, and `fit_transform`/`transform` maps samples to these bins through `tree.apply(X)`. Since decision tree leaves are trained to be informative about the target `y`, this typically yields proxy bins that carry more information than naive, equidistant binnings. It also supports arbitrary numbers of features natively.
+
+    Args:
+        tree: A tree-based classifier with a scikit-learn-compatible `fit(X, y, sample_weight=None)` and `apply(X)` interface, such as an instance of `sklearn.tree.DecisionTreeClassifier`.
+        fit_tree (optional): Whether `fit_transform` should call `tree.fit`. Set this to `False` to reuse an already-fitted `tree`, e.g., one that was fitted on a separate portion of the data. Defaults to `True`.
+    """
     tree: object
     fit_tree: bool = True
 
@@ -107,7 +114,13 @@ class _SingleUnivariateBinning:
 
 @dataclass
 class UnivariateBinning(AbstractRepresentation):
-    """TODO: add documentation"""
+    """A proxy representation that bins each proxy feature independently.
+
+    Each proxy feature is discretized into its own bins according to `proxy_bins`, and the resulting per-feature representations are concatenated along the bin dimension. Unlike `GridBinning`, which forms the full Cartesian product of per-feature bins, `UnivariateBinning`'s total number of proxy bins is the *sum* (not the product) of the per-feature bin counts, which keeps it usable even with several proxy features.
+
+    Args:
+        proxy_bins: The bin boundaries of a single proxy feature, ranging from `-inf` to `inf`, or a list of such boundaries, one for each proxy feature.
+    """
     proxy_bins: list[float] | list[list[float]]
 
     def __post_init__(self):
@@ -146,7 +159,13 @@ class UnivariateBinning(AbstractRepresentation):
 
 @dataclass
 class GridBinning(AbstractRepresentation):
-    """TODO: add documentation"""
+    """A proxy representation whose bins are the cells of a regular grid.
+
+    Each proxy feature is discretized according to its own bin boundaries in `proxy_bins`, and the resulting per-feature bin indices are combined into a single joint bin index for each sample, one per cell of the resulting grid. Unlike `UnivariateBinning`, whose number of bins grows additively with the number of proxy features, `GridBinning`'s bin number grows multiplicatively (the product of the per-feature numbers of bins), which quickly becomes impractical for more than a few proxy features but is highly informative for a few relevant proxy features.
+
+    Args:
+        proxy_bins: A list of bin boundaries, one list per proxy feature, each ranging from `-inf` to `inf`.
+    """
     proxy_bins: list[list[float]]
 
     def fit_transform(self, X, y, sample_weight=None, average=True, n_classes=None):
@@ -192,7 +211,20 @@ class GridBinning(AbstractRepresentation):
 
 @dataclass
 class GridSearchRepresentation(AbstractRepresentation):
-    """TODO: add documentation"""
+    """A representation that selects the hyper-parameters of its `base_representation` via grid search.
+
+    For each combination of hyper-parameters in `param_grid`, a clone of `base_representation` is fitted and its resulting transfer matrix `A` is scored according to the given `criterion`. The clone with the lowest score is kept and used for all further calls to `transform`.
+
+    Args:
+        base_representation: The representation whose hyper-parameters are searched over. It must support scikit-learn's `clone` and `set_params` interface.
+        param_grid: A `dict` that maps each hyper-parameter name (as accepted by `base_representation.set_params`) to a list of candidate values, in the same way as scikit-learn's `GridSearchCV`. An empty `dict` evaluates `base_representation` itself, unmodified.
+        criterion (optional): The criterion used to score each candidate representation's transfer matrix `A`, either `"dussap"` (Dussap et al., 2023; minimizes the inverse of the second-smallest eigenvalue of the centered Gram matrix of `A`) or `"blobel"` (Blobel, 1985; minimizes the condition number of `A`). Defaults to `"dussap"`.
+        n_jobs (optional): The number of parallel processes used to evaluate candidates. Use `1` to evaluate sequentially, without spawning subprocesses; any other value, including `None`, evaluates candidates through `multiprocessing.Pool` with that many processes, or with one process per available processor if `n_jobs` is `None` or less than `1`. Defaults to `None`.
+        is_verbose (optional): Whether to print progress while evaluating candidates. Defaults to `False`.
+
+    Attributes:
+        results_: A list of all evaluated candidates, sorted ascending by `criterion`. Each candidate is represented as a `dict` with keys `"losses"`, `"params"`, `"representation"`, and `"A"`. This attribute is set during `fit_transform`.
+    """
     base_representation: AbstractRepresentation
     param_grid: dict[str, object]
     criterion: str = "dussap"
