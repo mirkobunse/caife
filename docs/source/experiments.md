@@ -20,8 +20,4 @@ ssh gwkilab
 
 ## Examples and Sketches
 
-See instructions from the following files:
-
-- `examples/lene/README.md`
-- `examples/lucas/README.md`
-- `sketches/README.md`
+See instructions from `examples/quickstart.ipynb`

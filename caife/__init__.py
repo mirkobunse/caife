@@ -1,3 +1,7 @@
+"""caife: Composable and Auto-differentiable Inversion of Fredholm Equations.
+
+caife is a Python package for unfolding, the inverse problem of recovering a target distribution from a smeared, indirectly observed proxy distribution. It provides composable models of the measurement process, representations of the proxy feature space, solvers, and utilities for evaluating and estimating the uncertainty of unfolding results.
+"""
 __version__ = "0.0.4-rc6"
 
 from jax import config

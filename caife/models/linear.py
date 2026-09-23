@@ -20,11 +20,15 @@ from .latents import LatentSpectrum, LatentSystematics
 class LinearCountModel(AbstractModel):
     """Linear model for solving `g = A @ f + b` over count histograms `g`, `f`, and `b`.
 
+    This model does not consider any systematic parameters; use `LinearSystematicsCountModel` if `systematics` need to be modeled.
+
     Args:
         target_bins: Bin boundaries of the target quantity, shape (n_target_bins+1,).
         representation: The data representation that is computed from the proxy features.
 
     Attributes:
+        A_: The fitted transfer matrix `A`, shape `(n_bins_proxy, n_bins_target)`. Set during `fit`.
+        g_background_: The fitted background proxy distribution `b`, shape `(n_bins_proxy,)`. Set during `fit`.
         n_background_samples: Number of background samples, set during `fit` but meant to be manually changed to the actual number of background samples after fitting.
         n_bins_target: Number of target bins, as determined by the `target_bins`.
     """
@@ -53,7 +57,7 @@ class LinearCountModel(AbstractModel):
         return self # sklearn convention; allows method chaining
 
     def _fit_transfer(self, X, y, sample_weight, systematics):
-        """Fit the transfer model `A(s)`."""
+        """Fit the constant transfer matrix `A`; `systematics`, if given, are ignored."""
         if systematics is not None:
             print("WARNING: LinearCountModel does not support systematics; chose another model")
         A = self.representation.fit_transform( # constant; no systematics modeled
@@ -116,6 +120,11 @@ class LinearSystematicsCountModel(LinearCountModel):
         solver_options (optional): The `options` argument in `scipy.optimize.minimize`. Defaults to `{ "gtol": 1e-8, "maxiter": 100 }`.
 
     Attributes:
+        coeffs_: The fitted coefficients of the per-column logistic regressions, shape `(n_bins_proxy, n_bins_target, n_systematic_parameters + 1)`. Set during `fit`.
+        A_mask: A boolean mask of shape `(n_bins_proxy, n_bins_target)`, marking the proxy/target bin combinations that were actually observed while fitting; `A(s)` is only meaningful for these entries. Set during `fit`.
+        systematic_bounds: The per-parameter `(min, max)` bounds observed in the training `systematics`, shape `(n_systematic_parameters, 2)`. Set during `fit`.
+        opt_: The `scipy.optimize.OptimizeResult` of fitting the logistic regressions, with an additional `wallclock_time` attribute. Set during `fit`.
+        g_background_: The fitted background proxy distribution `b`, shape `(n_bins_proxy,)`. Set during `fit`.
         n_background_samples: Number of background samples, set during `fit` but meant to be manually changed to the actual number of background samples after fitting.
         n_bins_target: Number of target bins, as determined by the `target_bins`.
     """
@@ -127,6 +136,7 @@ class LinearSystematicsCountModel(LinearCountModel):
     })
 
     def _fit_transfer(self, X, y, sample_weight=None, systematics=None):
+        """Fit the systematics-dependent transfer matrix `A(s)` via per-column logistic regression."""
         if systematics is None:
             raise ValueError("No systematics given; use a LinearCountModel instead")
         X = self.representation.fit_transform(

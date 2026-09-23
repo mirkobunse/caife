@@ -1,3 +1,5 @@
+"""Module containing latent-space parameterizations of model parameters."""
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod

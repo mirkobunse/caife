@@ -1,3 +1,5 @@
+"""Module containing representations of the proxy feature space."""
+
 from __future__ import annotations
 
 import itertools
@@ -19,6 +21,9 @@ class TreeBinning(AbstractRepresentation):
     Args:
         tree: A tree-based classifier with a scikit-learn-compatible `fit(X, y, sample_weight=None)` and `apply(X)` interface, such as an instance of `sklearn.tree.DecisionTreeClassifier`.
         fit_tree (optional): Whether `fit_transform` should call `tree.fit`. Set this to `False` to reuse an already-fitted `tree`, e.g., one that was fitted on a separate portion of the data. Defaults to `True`.
+
+    Attributes:
+        bin_index_: A mapping from the tree's (arbitrary) leaf IDs to consecutive proxy bin IDs, shape `(max_leaf_id + 1, 2)`; apply it as `bin_index_[tree.apply(X), 1]`. Set during `fit_transform`.
     """
     tree: object
     fit_tree: bool = True

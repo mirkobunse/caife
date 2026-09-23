@@ -1,3 +1,5 @@
+"""Module containing a SciPy-based solver of unfolding equations."""
+
 from __future__ import annotations
 
 import traceback

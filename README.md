@@ -19,7 +19,9 @@ pip install "jax[cpu]"
 
 ## Usage
 
-For detailed information, visit [the documentation](https://mirkobunse.github.io/caife).
+For a quickstart quide, see the Jupyter notebook at `examples/quickstart.ipynb`.
+
+For more detailed information, visit [the documentation](https://mirkobunse.github.io/caife).
 
 To build the documentation locally, issue the following commands and open `docs/build/html/index.html` in your browser.
 

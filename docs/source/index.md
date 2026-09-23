@@ -38,8 +38,4 @@ pip install --force-reinstall --no-deps 'caife @ git+https://github.com/mirkobun
 
 ## Usage
 
-TODO
-
-```python
-# TODO
-```
+See the Jupyter notebook at `examples/quickstart.ipynb`.

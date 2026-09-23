@@ -1,4 +1,4 @@
-"""Module containing models of the measurement process."""
+"""Module containing the abstract interface for models of the measurement process."""
 
 from abc import ABC, abstractmethod
 
