@@ -9,11 +9,11 @@ from scipy import optimize
 
 from . import AbstractSolver, LatentResult, is_valid_hessian, symmetrize_hessian_fn
 
-"""Factory function, without arguments, to create solver options."""
 SOLVER_OPTIONS_FACTORY = lambda: {
     "gtol": 1e-8,
     "maxiter": 1000,
 }
+"""Factory function, without arguments, to create solver options."""
 
 _SECOND_ORDER_SOLVERS = [
     "newton-cg",
@@ -30,8 +30,8 @@ class ScipySolver(AbstractSolver):
     """A solver with a SciPy back-end.
 
     Args:
-        nll: The negative log-likelihood function with the signature `nll(params, *args) -> float`, where `params` is a pytree containing vectors in their natural target space, e.g., count spectra or systematic paramenter vectors, and `args` is a tuple of fixed parameters of the function.
-        latent_vectors: A JAX pytree of latent vectors. These vectors describe, for all model paramenters, the mapping between their latent and natural target spaces as well as the generation of their starting points in latent space.
+        nll: The negative log-likelihood function with the signature `nll(params, *args) -> float`, where `params` is a pytree containing vectors in their natural target space, e.g., count spectra or systematic parameter vectors, and `args` is a tuple of fixed parameters of the function.
+        latent_vectors: A JAX pytree of latent vectors. These vectors describe, for all model parameters, the mapping between their latent and natural target spaces as well as the generation of their starting points in latent space.
         n_trials: The number of random trials, each with a new, random starting point. Defaults to `20`.
         seed (optional): Random number generator seed. Defaults to `None`.
         solver (optional): The `method` argument in `scipy.optimize.minimize`. Defaults to "trust-ncg".

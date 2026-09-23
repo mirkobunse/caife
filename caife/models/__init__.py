@@ -20,7 +20,7 @@ class AbstractModel(ABC):
             background (optional): A separate set of background instances, shape (n_background_samples,) or (n_background_samples, n_proxy_features). If the background should be weighted, a tuple of this set and its weights. Defaults to `None` for no background consideration.
 
         Returns:
-            This model's itself.
+            This model itself.
         """
 
     @abstractmethod

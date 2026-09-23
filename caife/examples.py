@@ -4,7 +4,7 @@ import numpy as np
 from scipy.stats import norm
 
 # the fixed ground-truth mixture from which `y` is drawn; shared with
-# `create_effective_area`, which needs to know this same shape
+# `create_effective_areas`, which needs to know this same shape
 _MIXTURE_WEIGHTS = np.array([0.6, 0.4])
 _MIXTURE_MEANS = np.array([-2.0, 3.0])
 _MIXTURE_STDS = np.array([0.8, 1.2])
@@ -20,7 +20,7 @@ def create_data(n_samples=200_000, rng=None):
     are sample weights that are mostly random but slightly increase with `y`.
 
     Args:
-        n_samples (optional): The number of samples to draw. Defaults to `100_000`.
+        n_samples (optional): The number of samples to draw. Defaults to `200_000`.
         rng (optional): A NumPy random number generator, an integer seed, or
             `None` for an unseeded generator. Defaults to `None`.
 

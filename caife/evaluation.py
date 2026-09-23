@@ -13,7 +13,7 @@ def global_correlation_coefficients(result, nll, args=(), ignore_overflow_bins=T
         result: A JAX pytree of result components; could be a single spectrum of shape (n_target_bins,).
         nll: The negative log-likelihood function that the `result` minimizes.
         args (optional): A tuple of extra arguments that are passed to `nll`. Defaults to `()`.
-        ignore_overflow_bins (optional): A JAX pytree specifying where to ignore the correlations with the two over- and underflow bins. Defaults to `True`.
+        ignore_overflow_bins (optional): Either a single `bool`, applied to every result component, or a JAX pytree of bools matching the structure of `result`, to control this per component. Defaults to `True`.
 
     Returns:
         A JAX pytree of the global correlation coefficients corresponding to result components.
@@ -72,7 +72,7 @@ def pairwise_correlation_scores(result, nll, args=(), ignore_overflow_bins=True)
         result: A JAX pytree of result components; could be a single spectrum of shape (n_target_bins,).
         nll: The negative log-likelihood function that the `result` minimizes.
         args (optional): A tuple of extra arguments that are passed to `nll`. Defaults to `()`.
-        ignore_overflow_bins (optional): A JAX pytree specifying where to ignore the correlations with the two over- and underflow bins. Defaults to `True`.
+        ignore_overflow_bins (optional): Either a single `bool`, applied to every result component, or a JAX pytree of bools matching the structure of `result`, to control this per component. Defaults to `True`.
 
     Returns:
         A JAX pytree of the pair-wise correlation scores corresponding to result components.
@@ -159,7 +159,7 @@ def effective_number_of_degrees_of_freedom(result, unreg_nll, tau, ignore_overfl
 
 
 def logarithmic_earth_movers_distance(f_true, f_est):
-    """Compute the Earth Mover's Distance, a.k.a. Wasserstein L1 distance, between the logarithm of a true spectrum and the logarithm of its estimate. Ignore over- and underflow bins during the computation. Due to the logarithmic scaling, and due to be choice of distance, the resulting value well represents the "physicist's eye" in assessing similarity between spectra.
+    """Compute the Earth Mover's Distance, a.k.a. Wasserstein L1 distance, between the logarithm of a true spectrum and the logarithm of its estimate. Ignore over- and underflow bins during the computation. Due to the logarithmic scaling, and due to the choice of distance, the resulting value well represents the "physicist's eye" in assessing similarity between spectra.
 
     Args:
         f_true: The true spectrum, shape (n_target_bins,).

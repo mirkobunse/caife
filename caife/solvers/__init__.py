@@ -63,8 +63,8 @@ class AbstractSolver(ABC):
     """Abstract base class that all caife solvers inherit from.
 
     Args:
-        nll: The negative log-likelihood function with the signature `nll(params, *args) -> float`, where `params` is a pytree containing vectors in their natural target space, e.g., count spectra or systematic paramenter vectors, and `args` is a tuple of fixed parameters of the function.
-        latent_vectors: A JAX pytree of latent vectors. These vectors describe, for all model paramenters, the mapping between their latent and natural target spaces as well as the generation of their starting points in latent space.
+        nll: The negative log-likelihood function with the signature `nll(params, *args) -> float`, where `params` is a pytree containing vectors in their natural target space, e.g., count spectra or systematic parameter vectors, and `args` is a tuple of fixed parameters of the function.
+        latent_vectors: A JAX pytree of latent vectors. These vectors describe, for all model parameters, the mapping between their latent and natural target spaces as well as the generation of their starting points in latent space.
         n_trials: The number of random trials, each with a new, random starting point. Defaults to `20`.
         seed (optional): Random number generator seed. Defaults to `None`.
 
@@ -94,7 +94,7 @@ class AbstractSolver(ABC):
                 ell,
             )
             value = self.nll(params, *args)
-            return value.squeeze() # ensure that a float is retured
+            return value.squeeze() # ensure that a float is returned
         self.latent_nll_ = latent_nll
 
     def create_starting_vector(self):

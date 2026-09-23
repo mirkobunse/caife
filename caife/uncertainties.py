@@ -13,7 +13,7 @@ def uncertainty_from_hessian(result, nll, args=(),):
         args (optional): A tuple of extra arguments that are passed to `nll`. Defaults to `()`.
 
     Returns:
-        A JAX pytree of the pair-wise correlation scores corresponding to result components.
+        A JAX pytree of the statistical uncertainties corresponding to result components.
     """
     result_vec, unravel_fn = jax.flatten_util.ravel_pytree(result)
     def vec_nll(result_vec, *args):
@@ -33,7 +33,7 @@ def uncertainty_from_aux(aux, n_samples=10_000, rng=None):
 
     Args:
         aux: A dict of auxiliary information from the optimizer. Must contain keys `ell`, `hess`, and `unravel_fn`.
-        n_samples (optional): The number fo samples to generate in the latent space. Defaults to `10_000`.
+        n_samples (optional): The number of samples to generate in the latent space. Defaults to `10_000`.
         rng (optional): The random number generator. Defaults to `None`.
 
     Returns:
