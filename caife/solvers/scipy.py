@@ -34,7 +34,9 @@ class ScipySolver(AbstractSolver):
     Args:
         nll: The negative log-likelihood function with the signature `nll(params, *args) -> float`, where `params` is a pytree containing vectors in their natural target space, e.g., count spectra or systematic parameter vectors, and `args` is a tuple of fixed parameters of the function.
         latent_vectors: A JAX pytree of latent vectors. These vectors describe, for all model parameters, the mapping between their latent and natural target spaces as well as the generation of their starting points in latent space.
-        n_trials: The number of random trials, each with a new, random starting point. Defaults to `20`.
+        min_trials (optional): The minimum number of random trials, each with a new, random starting point. Defaults to `1`.
+        max_trials (optional): The maximum number of random trials. No further trials are started once this number is reached, even if `min_valid_trials` is not yet met. Defaults to `100`.
+        min_valid_trials (optional): The minimum number of trials that need to produce a valid result. Further trials are started until this number is reached, unless `max_trials` is reached first. Defaults to `1`.
         seed (optional): Random number generator seed. Defaults to `None`.
         solver (optional): The `method` argument in `scipy.optimize.minimize`. Defaults to "trust-ncg".
         solver_options (optional): The `options` argument in `scipy.optimize.minimize`. Defaults to `caife.solvers.scipy.SOLVER_OPTIONS_FACTORY()`.

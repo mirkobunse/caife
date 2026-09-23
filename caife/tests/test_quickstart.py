@@ -28,7 +28,7 @@ def create_quickstart_setup(seed=1491):
             jnp.log(params[1:-1] / a_eff + 1e-10)) / tau
         return value
     solver = caife.ScipySolver(
-        nll, model.create_latents(X_tst), seed=seed, n_trials=3)
+        nll, model.create_latents(X_tst), seed=seed, min_trials=3)
 
     return {
         "model": model,

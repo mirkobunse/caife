@@ -65,7 +65,9 @@ class AbstractSolver(ABC):
     Args:
         nll: The negative log-likelihood function with the signature `nll(params, *args) -> float`, where `params` is a pytree containing vectors in their natural target space, e.g., count spectra or systematic parameter vectors, and `args` is a tuple of fixed parameters of the function.
         latent_vectors: A JAX pytree of latent vectors. These vectors describe, for all model parameters, the mapping between their latent and natural target spaces as well as the generation of their starting points in latent space.
-        n_trials: The number of random trials, each with a new, random starting point. Defaults to `20`.
+        min_trials (optional): The minimum number of random trials, each with a new, random starting point. Defaults to `1`.
+        max_trials (optional): The maximum number of random trials. No further trials are started once this number is reached, even if `min_valid_trials` is not yet met. Defaults to `100`.
+        min_valid_trials (optional): The minimum number of trials that need to produce a valid result. Further trials are started until this number is reached, unless `max_trials` is reached first. Defaults to `1`.
         seed (optional): Random number generator seed. Defaults to `None`.
 
     Note:
@@ -73,10 +75,18 @@ class AbstractSolver(ABC):
     """
     nll: callable
     latent_vectors: any # a pytree
-    n_trials: int = 20
+    min_trials: int = 1
+    max_trials: int = 100
+    min_valid_trials: int = 1
     seed: int | None = None
 
     def __post_init__(self):
+        if self.max_trials < 1:
+            raise ValueError(f"max_trials={self.max_trials} must be at least 1")
+        if self.min_trials > self.max_trials:
+            raise ValueError(f"min_trials={self.min_trials} exceeds max_trials={self.max_trials}")
+        if self.min_valid_trials > self.max_trials:
+            raise ValueError(f"min_valid_trials={self.min_valid_trials} exceeds max_trials={self.max_trials}")
         self._rng = np.random.RandomState(self.seed)
 
         # extract the PyTree structure
@@ -111,15 +121,23 @@ class AbstractSolver(ABC):
     def solve(self, args=(), return_aux=False):
         """Solve the unfolding problem.
 
+        Random trials are started until at least `min_trials` trials have been executed and at least `min_valid_trials` of them have produced a valid result, but no more than `max_trials` trials are started. The best valid result among all trials is returned.
+
         Args:
             args (optional): A tuple of extra arguments that are passed to `nll`. Defaults to `()`.
             return_aux (optional): Whether to return auxiliary information on the solution. This information could include, for instance, the number of iterations or the wall-clock time used for solving. Defaults to `False`.
 
         Returns:
-            A result pytree with the same structure as the given `latent_vectors` or `None` if none of the `n_trials` produced a valid result. If `return_aux` is `True`, return a pair of this result and a `dict` of auxiliary information.
+            A result pytree with the same structure as the given `latent_vectors` or `None` if none of the trials produced a valid result. If `return_aux` is `True`, return a pair of this result and a `dict` of auxiliary information.
         """
-        # create LatentResults
-        latent_results = [self.solve_latent(args) for _ in range(self.n_trials)]
+        # create LatentResults until the minimum numbers of trials and valid trials are met
+        latent_results = []
+        n_valid = 0
+        while len(latent_results) < self.max_trials and (
+                len(latent_results) < self.min_trials or n_valid < self.min_valid_trials):
+            latent_result = self.solve_latent(args)
+            latent_results.append(latent_result)
+            n_valid += latent_result.is_valid # cast bool to 0 or 1
 
         # unravel and map these results to their target space
         def unravel_to_target_space(ell):
