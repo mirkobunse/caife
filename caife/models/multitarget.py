@@ -180,10 +180,10 @@ class MultiTargetSystematicsModel(MultiTargetModel):
             self.n_bins_multitarget, # = t = n_bins_multitarget
             systematics.shape[1], # = s = n_systematic_params
         )
-        self.A_mask = jnp.einsum( # check where the full matrix is > 0
-            "np,nt,n->pt", X, target_mask, sample_weight) > 0
         if sample_weight is None:
             sample_weight = np.ones(len(y))
+        self.A_mask = jnp.einsum( # check where the full matrix is > 0
+            "np,nt,n->pt", X, target_mask, sample_weight) > 0
         class_weight = jnp.sum( # normalize weights per class to unit sum
             target_mask * sample_weight.reshape((-1, 1)),
             axis=0,

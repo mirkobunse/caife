@@ -4,6 +4,7 @@ from unittest import TestCase
 import numpy as np
 
 import caife
+from caife import examples
 
 
 class TestLinearCountModel(TestCase):
@@ -136,6 +137,147 @@ class TestMultiTargetModel(TestCase):
             for i_b in range(model_b.n_bins_target):
                 reference[i_a, i_b] = np.sum((y_a == i_a) & (y_b == i_b))
         np.testing.assert_equal(model.target_view(Y), reference)
+
+
+class TestLinearSystematicsCountModel(TestCase):
+    def setUp(self):
+        self.target_bins = np.concatenate(([-np.inf], np.linspace(-4, 5, 10), [np.inf]))
+        self.proxy_bins = np.concatenate(([-np.inf], np.linspace(-6, 8, 15), [np.inf]))
+        (self.X, self.y, self.w, self.S), _ = examples.split_data(
+            *examples.create_data(n_samples=20_000, rng=1491), rng=1491)
+
+    def create_model(self):
+        return caife.LinearSystematicsCountModel(
+            self.target_bins,
+            caife.UnivariateBinning(self.proxy_bins),
+        )
+
+    def test_systematics_are_required(self):
+        self.assertRaises( # fitting without systematics raises a ValueError
+            ValueError,
+            self.create_model().fit,
+            self.X, # *args
+            self.y,
+        )
+
+    def test_model(self):
+        model = self.create_model().fit(
+            self.X, self.y, sample_weight=self.w, systematics=self.S)
+        n_bins_proxy = len(self.proxy_bins) - 1
+        n_bins_target = len(self.target_bins) - 1
+
+        # the fit produces one logistic regression per proxy bin and target bin,
+        # each with one coefficient per systematic parameter, plus a bias term
+        self.assertEqual(
+            model.coeffs_.shape,
+            (n_bins_proxy, n_bins_target, self.S.shape[1] + 1),
+        )
+        self.assertEqual(model.A_mask.shape, (n_bins_proxy, n_bins_target))
+
+        # the bounds are taken from the systematics of the training data
+        np.testing.assert_allclose(model.systematic_bounds[:, 0], self.S.min(axis=0))
+        np.testing.assert_allclose(model.systematic_bounds[:, 1], self.S.max(axis=0))
+
+        # each column of A(s) is a proxy distribution and therefore sums to one
+        for s in [np.array([-1.]), np.array([0.]), np.array([1.])]:
+            A = np.asarray(model.A(s))
+            self.assertEqual(A.shape, (n_bins_proxy, n_bins_target))
+            self.assertTrue(np.all(A >= 0))
+            np.testing.assert_allclose(A.sum(axis=0), np.ones(n_bins_target), atol=1e-6)
+
+        # in the toy data, the proxy is smeared around the target with a mean
+        # that shifts by 0.5*s; since the proxy bins are one unit wide, A(s)
+        # must shift each target bin's proxy distribution by about one bin as
+        # s goes from -1 to 1
+        i_proxy = np.arange(len(self.proxy_bins) - 1)
+        A_low = np.asarray(model.A(np.array([-1.])))
+        A_high = np.asarray(model.A(np.array([1.])))
+        for i_target in range(3, len(self.target_bins) - 3): # skip the outer bins
+            shift = (A_high[:, i_target] - A_low[:, i_target]) @ i_proxy
+            self.assertGreater(shift, .5)
+            self.assertLess(shift, 2.)
+
+        # the model consumes a pair (f, s) of latents, unlike the systematics-
+        # unaware LinearCountModel, which consumes f alone
+        latents = model.create_latents(self.X)
+        self.assertEqual(len(latents), 2)
+        self.assertIsInstance(latents[0], caife.LatentSpectrum)
+        self.assertIsInstance(latents[1], caife.LatentSystematics)
+
+        f = np.asarray(model.target_view(self.y), dtype=float)
+        g_pred = model((f, np.array([0.])))
+        self.assertEqual(g_pred.shape, (len(self.proxy_bins) - 1,))
+        self.assertTrue(np.all(np.asarray(g_pred) >= 0))
+
+    def test_fit_without_sample_weight(self):
+        model = self.create_model().fit(self.X, self.y, systematics=self.S)
+        np.testing.assert_allclose(
+            np.asarray(model.A(np.array([0.]))).sum(axis=0),
+            np.ones(len(self.target_bins) - 1),
+            atol=1e-6,
+        )
+
+
+class TestMultiTargetSystematicsModel(TestCase):
+    def setUp(self):
+        rng = np.random.default_rng(1491)
+        n_samples = 20_000
+        self.target_bins = [
+            np.concatenate(([-np.inf], np.arange(1, 4, dtype=float), [np.inf])),
+            np.concatenate(([-np.inf], np.arange(1, 4, dtype=float), [np.inf])),
+        ]
+        self.representation = caife.GridBinning([
+            np.concatenate(([-np.inf], np.linspace(0, 4, 5), [np.inf])),
+            np.concatenate(([-np.inf], np.linspace(0, 4, 5), [np.inf])),
+        ])
+        self.Y = rng.uniform(size=(n_samples, 2)) * 4
+        self.S = rng.uniform(-1, 1, size=(n_samples, 1))
+        self.X = np.stack(( # both proxies are shifted by the systematics
+            self.Y[:, 0] + .5 * self.S[:, 0] + rng.normal(size=n_samples),
+            self.Y[:, 1] + .5 * self.S[:, 0] + rng.normal(size=n_samples),
+        )).T
+
+    def create_model(self):
+        return caife.MultiTargetSystematicsModel(self.target_bins, self.representation)
+
+    def test_systematics_are_required(self):
+        self.assertRaises( # fitting without systematics raises a ValueError
+            ValueError,
+            self.create_model().fit,
+            self.X, # *args
+            self.Y,
+        )
+
+    def test_model(self):
+        model = self.create_model().fit(self.X, self.Y, systematics=self.S)
+        n_bins_proxy = self.representation.n_output_features
+        n_bins_multitarget = model.n_bins_multitarget
+
+        np.testing.assert_array_equal(model.n_bins_per_target, [4, 4])
+        self.assertEqual(n_bins_multitarget, 16)
+        self.assertEqual(
+            model.coeffs_.shape,
+            (n_bins_proxy, n_bins_multitarget, self.S.shape[1] + 1),
+        )
+
+        # each column of A(s) is a proxy distribution and therefore sums to one
+        A = np.asarray(model.A(np.array([0.])))
+        self.assertEqual(A.shape, (n_bins_proxy, n_bins_multitarget))
+        np.testing.assert_allclose(
+            A.sum(axis=0), np.ones(n_bins_multitarget), atol=1e-6)
+
+        # f is a multi-dimensional histogram over all target quantities
+        latents = model.create_latents(self.X)
+        self.assertEqual(len(latents), 2)
+        self.assertIsInstance(latents[0], caife.LatentReshape)
+        self.assertIsInstance(latents[1], caife.LatentSystematics)
+
+        f = np.asarray(model.target_view(self.Y), dtype=float)
+        self.assertEqual(f.shape, tuple(model.n_bins_per_target))
+
+        g_pred = model((f, np.array([0.])))
+        self.assertEqual(g_pred.shape, (self.representation.n_output_features,))
+        self.assertTrue(np.all(np.asarray(g_pred) >= 0))
 
 
 if __name__ == '__main__':
