@@ -117,7 +117,7 @@ class LinearSystematicsCountModel(LinearCountModel):
         representation: The data representation that is computed from the proxy features.
         C (optional): The regularization strength for each logistic regression model, with the behavior defined by scikit-learn. Defaults to `None` for no regularization.
         solver (optional): The `method` argument in `scipy.optimize.minimize`. Defaults to "L-BFGS-B".
-        solver_options (optional): The `options` argument in `scipy.optimize.minimize`. Defaults to `{ "gtol": 1e-8, "maxiter": 100 }`.
+        solver_options (optional): The `options` argument in `scipy.optimize.minimize`. Defaults to `{ "gtol": 1e-8, "maxiter": 10_000 }`.
 
     Attributes:
         coeffs_: The fitted coefficients of the per-column logistic regressions, shape `(n_bins_proxy, n_bins_target, n_systematic_parameters + 1)`. Set during `fit`.
@@ -132,7 +132,7 @@ class LinearSystematicsCountModel(LinearCountModel):
     solver: str = "L-BFGS-B" # same as in sklearn's LogisticRegression
     solver_options: dict[str,object] = field(default_factory=lambda: {
         "gtol": 1e-8,
-        "maxiter": 100,
+        "maxiter": 10_000,
     })
 
     def _fit_transfer(self, X, y, sample_weight=None, systematics=None):

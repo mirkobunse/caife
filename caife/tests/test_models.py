@@ -144,7 +144,7 @@ class TestLinearSystematicsCountModel(TestCase):
         self.target_bins = np.concatenate(([-np.inf], np.linspace(-4, 5, 10), [np.inf]))
         self.proxy_bins = np.concatenate(([-np.inf], np.linspace(-6, 8, 15), [np.inf]))
         (self.X, self.y, self.w, self.S), _ = examples.split_data(
-            *examples.create_data(n_samples=20_000, rng=1491), rng=1491)
+            *examples.create_data(n_samples=30_000, rng=1491), rng=1491)
 
     def create_model(self):
         return caife.LinearSystematicsCountModel(

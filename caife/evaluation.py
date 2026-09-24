@@ -75,7 +75,7 @@ def pairwise_correlation_scores(result, nll, args=(), ignore_overflow_bins=True)
         ignore_overflow_bins (optional): Either a single `bool`, applied to every result component, or a JAX pytree of bools matching the structure of `result`, to control this per component. Defaults to `True`.
 
     Returns:
-        A JAX pytree of the pair-wise correlation scores corresponding to result components.
+        A JAX pytree of the pair-wise correlation scores corresponding to result components. The score of a component is `nan` if it has fewer than two entries (after ignoring the overflow bins, if requested), because such a component has no pairs of entries to correlate.
     """
     result_vec, unravel_fn = jax.flatten_util.ravel_pytree(result)
     def vec_nll(result_vec, *args):
@@ -110,6 +110,8 @@ def pairwise_correlation_scores(result, nll, args=(), ignore_overflow_bins=True)
     def pcs_fn(sub_corr, ignore_overflow_bins):
         if ignore_overflow_bins:
             sub_corr = sub_corr[1:-1, 1:-1]
+        if sub_corr.shape[0] < 2:
+            return np.nan # there are no pairs of bins to correlate
         return np.mean(np.abs( # average off-diagonal correlation
             sub_corr[np.triu_indices(sub_corr.shape[0], k=1)]))
     if isinstance(ignore_overflow_bins, bool):
