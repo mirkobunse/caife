@@ -150,6 +150,7 @@ class TestLinearSystematicsCountModel(TestCase):
         return caife.LinearSystematicsCountModel(
             self.target_bins,
             caife.UnivariateBinning(self.proxy_bins),
+            solver_options={"gtol": 1e-6, "maxiter": 1_000},
         )
 
     def test_systematics_are_required(self):
@@ -238,7 +239,11 @@ class TestMultiTargetSystematicsModel(TestCase):
         )).T
 
     def create_model(self):
-        return caife.MultiTargetSystematicsModel(self.target_bins, self.representation)
+        return caife.MultiTargetSystematicsModel(
+            self.target_bins,
+            self.representation,
+            solver_options={"gtol": 1e-6, "maxiter": 1_000},
+        )
 
     def test_systematics_are_required(self):
         self.assertRaises( # fitting without systematics raises a ValueError
