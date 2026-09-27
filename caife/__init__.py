@@ -2,7 +2,7 @@
 
 caife is a Python package for unfolding, the inverse problem of recovering a target distribution from a smeared, indirectly observed proxy distribution. It provides composable models of the measurement process, representations of the proxy feature space, solvers, and utilities for evaluating and estimating the uncertainty of unfolding results.
 """
-__version__ = "0.0.4"
+__version__ = "0.0.5-rc1"
 
 from jax import config
 
@@ -53,8 +53,10 @@ from .solvers.scipy import (
 )
 
 from .evaluation import (
-    global_correlation_coefficients as global_correlation_coefficients,
-    pairwise_correlation_scores as pairwise_correlation_scores,
+    gcc_from_nll as gcc_from_nll,
+    pcs_from_nll as pcs_from_nll,
+    gcc_from_aux as gcc_from_aux,
+    pcs_from_aux as pcs_from_aux,
     effective_number_of_degrees_of_freedom as effective_number_of_degrees_of_freedom,
     logarithmic_earth_movers_distance as logarithmic_earth_movers_distance,
     gaussian_nll_score as gaussian_nll_score,
