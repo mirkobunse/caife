@@ -64,6 +64,55 @@ class TestTikhonovRegularization(TestCase):
             decimal=4 # qunfold rounds values quite often, sometimes to the 4th decimal place
         )
 
+    def test_linear_spectra(self):
+        rng = np.random.default_rng(0)
+        for n_classes in [3, 4, 7, 12, 50]:
+            for _ in range(5):
+                # any f that is linear in its indices has a zero regularization value, both
+                # with the default arguments and with the corresponding explicit arguments
+                a, b = rng.uniform(-100, 100), rng.uniform(0, 1000)
+                f = a * np.arange(n_classes) + b
+                for value in [
+                        caife.tikhonov_regularization(f),
+                        caife.tikhonov_regularization(f, scaling_factors=None, order=1),
+                    ]:
+                    self.assertAlmostEqual(float(np.squeeze(value)), 0, delta=1e-8)
+
+            # the same holds for a matrix of linear candidate solutions, one per row
+            a = rng.uniform(-100, 100, size=(4, 1))
+            b = rng.uniform(0, 1000, size=(4, 1))
+            f = a * np.arange(n_classes) + b # shape (n_solutions, n_classes)
+            values = caife.tikhonov_regularization(f)
+            self.assertEqual(np.shape(values), (4,))
+            np.testing.assert_allclose(values, 0, atol=1e-8)
+
+            # in contrast, a curved f is penalized
+            value = caife.tikhonov_regularization(np.arange(n_classes)**2.)
+            self.assertGreater(float(np.squeeze(value)), 0)
+
+    def test_quadratic_spectra(self):
+        rng = np.random.default_rng(0)
+        for n_classes in [4, 7, 12, 50]: # order 2 leaves n_classes-3 bins to regularize
+            for _ in range(5):
+                # any f that is quadratic in its indices has a zero regularization value of order 2
+                a, b, c = rng.uniform(-100, 100), rng.uniform(-100, 100), rng.uniform(0, 1000)
+                f = a * np.arange(n_classes)**2 + b * np.arange(n_classes) + c
+                value = caife.tikhonov_regularization(f, scaling_factors=None, order=2)
+                self.assertAlmostEqual(float(np.squeeze(value)), 0, delta=1e-8)
+
+            # the same holds for a matrix of quadratic candidate solutions, one per row
+            a = rng.uniform(-100, 100, size=(4, 1))
+            b = rng.uniform(-100, 100, size=(4, 1))
+            c = rng.uniform(0, 1000, size=(4, 1))
+            f = a * np.arange(n_classes)**2 + b * np.arange(n_classes) + c # shape (n_solutions, n_classes)
+            values = caife.tikhonov_regularization(f, order=2)
+            self.assertEqual(np.shape(values), (4,))
+            np.testing.assert_allclose(values, 0, atol=1e-8)
+
+            # in contrast, a cubic f is penalized
+            value = caife.tikhonov_regularization(np.arange(n_classes)**3., order=2)
+            self.assertGreater(float(np.squeeze(value)), 0)
+
 
 if __name__ == '__main__':
     unittest.main()
