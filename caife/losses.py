@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import operator
-from functools import partial
 
 import jax
 from jax import numpy as jnp
 from jax.typing import ArrayLike
+
+from .utils.pytree import promote_structure
 
 _EPS = 1e-8
 
@@ -57,11 +58,8 @@ def tikhonov_regularization(f, scaling_factors=None, reduce=True):
     Returns:
         The value of the Tikhonov regularization with shape `(n_solutions,)` where `n_solutions=1` if `f.shape==(n_classes,)`.
     """
-    if jax.tree.structure(scaling_factors) == jax.tree.structure(f):
-        values = jax.tree.map(_tikhonov_regularization_fn, f, scaling_factors)
-    else:
-        fn = partial(_tikhonov_regularization_fn, scaling_factors=scaling_factors)
-        values = jax.tree.map(fn, f)
+    scaling_factors = promote_structure(f, scaling_factors)
+    values = jax.tree.map(_tikhonov_regularization_fn, f, scaling_factors)
     if reduce:
         return jax.tree.reduce(operator.add, values)
     return values

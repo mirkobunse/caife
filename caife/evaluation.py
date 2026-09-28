@@ -3,6 +3,8 @@
 import jax
 import numpy as np
 
+from .utils.pytree import promote_structure
+
 
 def gcc_from_nll(result, nll, args=(), ignore_overflow_bins=True):
     """Compute the global correlation coefficients of the result components from the target-space negative log-likelihood function.
@@ -42,6 +44,9 @@ def gcc_from_nll(result, nll, args=(), ignore_overflow_bins=True):
         sub_hessians,
     )
 
+    # promote the pytree structure of ignore_overflow_bins to the sub_hessians
+    ignore_overflow_bins = promote_structure(sub_hessians, ignore_overflow_bins)
+
     # compute the GCC for each sub-Hessian
     def gcc_fn(sub_hessian, ignore_overflow_bins):
         # bin-wise coefficients, see p. 28 in James (2006)
@@ -53,11 +58,6 @@ def gcc_from_nll(result, nll, args=(), ignore_overflow_bins=True):
 
         # mean value, see Fig 10.9 and Eq. 10.39 in Morik & Rhode (2023)
         return sub_gccs.mean()
-    if isinstance(ignore_overflow_bins, bool):
-        ignore_overflow_bins = jax.tree.unflatten( # repeat across tree structure
-            treedef,
-            [ignore_overflow_bins for _ in range(len(boundaries)-1)],
-        )
     with np.errstate(invalid="ignore"):
         gccs = jax.tree.map(gcc_fn, sub_hessians, ignore_overflow_bins)
     return gccs
@@ -106,6 +106,9 @@ def pcs_from_nll(result, nll, args=(), ignore_overflow_bins=True):
         sub_corrs,
     )
 
+    # promote the pytree structure of ignore_overflow_bins to the sub_corrs
+    ignore_overflow_bins = promote_structure(sub_corrs, ignore_overflow_bins)
+
     # compute the PCC for each sub-correlation matrix
     def pcs_fn(sub_corr, ignore_overflow_bins):
         if ignore_overflow_bins:
@@ -114,11 +117,6 @@ def pcs_from_nll(result, nll, args=(), ignore_overflow_bins=True):
             return np.nan # there are no pairs of bins to correlate
         return np.mean(np.abs( # average off-diagonal correlation
             sub_corr[np.triu_indices(sub_corr.shape[0], k=1)]))
-    if isinstance(ignore_overflow_bins, bool):
-        ignore_overflow_bins = jax.tree.unflatten( # repeat across tree structure
-            treedef,
-            [ignore_overflow_bins for _ in range(len(boundaries)-1)],
-        )
     with np.errstate(invalid="ignore"):
         pcss = jax.tree.map(pcs_fn, sub_corrs, ignore_overflow_bins)
     return pcss
@@ -195,13 +193,8 @@ def _cov_from_aux(aux, ignore_overflow_bins):
     # Jacobians, each with shape (*component_shape, n_latents)
     jacs = jax.jacfwd(aux["unravel_fn"])(aux["ell"])
 
-    # promote ignore_overflow_bins to the result treedef
-    if isinstance(ignore_overflow_bins, bool):
-        treedef = jax.tree.structure(jacs)
-        ignore_overflow_bins = jax.tree.unflatten( # repeat across tree structure
-            treedef,
-            [ignore_overflow_bins for _ in range(treedef.num_leaves)],
-        )
+    # promote the pytree structure of ignore_overflow_bins to the jacs
+    ignore_overflow_bins = promote_structure(jacs, ignore_overflow_bins)
 
     # propagate the latent covariance to the selected entries of each component; the
     # selection marginalizes all other entries and all other components
