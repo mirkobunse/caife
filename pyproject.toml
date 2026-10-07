@@ -40,9 +40,8 @@ authors = [
 dynamic = [ "version" ]
 
 [project.optional-dependencies]
-docs = [ "jax[cpu]", "myst-parser", "scikit-learn", "sphinx-rtd-theme" ]
-experiments = [ "jax[cpu]", "pandas", "scikit-learn" ]
-tests = [ "jax[cpu]", "scikit-learn" ]
+docs = [ "myst-parser", "scikit-learn", "sphinx-rtd-theme" ]
+tests = [ "scikit-learn" ]
 notebooks = [ "jupyter", "mpl_interactions[jupyter]", "pandas", "scikit-learn" ]
 
 [tool.setuptools.dynamic]
