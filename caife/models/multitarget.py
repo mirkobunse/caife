@@ -8,7 +8,6 @@ from dataclasses import dataclass, field
 import jax
 import numpy as np
 from jax import numpy as jnp
-from optax.losses import softmax_cross_entropy
 
 from .._qunfold import AbstractRepresentation
 from ..solvers.scipy import minimize
@@ -190,16 +189,14 @@ class MultiTargetSystematicsModel(MultiTargetModel):
         )
         sample_weight = sample_weight / class_weight[y]
         def loss_fn(coeffs):
-            loss = jnp.average(
-                softmax_cross_entropy(
-                    jnp.einsum( # compute logits for each sample
-                        "pts,ns,nt->np", # n = n_samples; for others, see coeffs_shape
-                        coeffs.reshape(coeffs_shape), # shape (p, t, s)
-                        systematics, # shape (n, s)
-                        target_mask, # shape (n, t)
-                    ),
-                    X, # one-hot encoding of proxy bins
-                ),
+            logits = jnp.einsum( # compute logits for each sample
+                "pts,ns,nt->np", # n = n_samples; for others, see coeffs_shape
+                coeffs.reshape(coeffs_shape), # shape (p, t, s)
+                systematics, # shape (n, s)
+                target_mask, # shape (n, t)
+            )
+            loss = jnp.average( # softmax cross entropy w.r.t. the one-hot encoding X of proxy bins
+                -jnp.sum(X * jax.nn.log_softmax(logits), axis=-1),
                 weights=sample_weight,
             )
             if self.C is not None: # regularize
