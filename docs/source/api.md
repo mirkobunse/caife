@@ -65,9 +65,13 @@ This page documents the public API of `caife`, organized by the kind of unfoldin
 ## Evaluation
 
 ```{eval-rst}
-.. autofunction:: caife.global_correlation_coefficients
+.. autofunction:: caife.gcc_from_nll
 
-.. autofunction:: caife.pairwise_correlation_scores
+.. autofunction:: caife.pcs_from_nll
+
+.. autofunction:: caife.gcc_from_aux
+
+.. autofunction:: caife.pcs_from_aux
 
 .. autofunction:: caife.effective_number_of_degrees_of_freedom
 

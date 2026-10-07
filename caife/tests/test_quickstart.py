@@ -120,10 +120,8 @@ class TestQuickstart(TestCase):
             n_valid += 1
 
             # all criteria of the notebook are computable and in a sane range
-            gcc = caife.global_correlation_coefficients(
-                f_est, self.setup["nll"], args=(tau,))
-            pcs = caife.pairwise_correlation_scores(
-                f_est, self.setup["nll"], args=(tau,))
+            gcc = caife.gcc_from_aux(aux)
+            pcs = caife.pcs_from_aux(aux)
             for correlation in [gcc, pcs]:
                 self.assertGreaterEqual(correlation, 0.)
                 self.assertLessEqual(correlation, 1.)
