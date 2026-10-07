@@ -26,6 +26,7 @@ Moreover, you will need a [JAX](https://jax.readthedocs.io/) backend. Typically,
 pip install "jax[cpu]"
 ```
 
+
 ### Upgrading
 
 To upgrade an existing installation of `caife`, run
@@ -33,6 +34,13 @@ To upgrade an existing installation of `caife`, run
 ```
 pip install --force-reinstall --no-deps 'caife @ git+https://github.com/mirkobunse/caife@main'
 ```
+
+
+## 64-bit precision
+
+Importing caife enables 64-bit precision in JAX because unfolding requires this precision to produce meaningful results. Please note that this setting affects all JAX code in your Python process, not only caife, and that float64 computations can be considerably slower on some GPUs than float32 computations.
+
+If you deliberately want to keep 32 bits, set the environment variable `JAX_ENABLE_X64=0` before importing caife. caife respects any explicit value of this variable.
 
 
 ## Usage

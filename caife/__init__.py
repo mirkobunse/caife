@@ -1,13 +1,21 @@
 """caife: Composable and Auto-differentiable Inversion of Fredholm Equations.
 
 caife is a Python package for unfolding, the inverse problem of recovering a target distribution from a smeared, indirectly observed proxy distribution. It provides composable models of the measurement process, representations of the proxy feature space, solvers, and utilities for evaluating and estimating the uncertainty of unfolding results.
+
+Importing caife enables 64-bit precision in JAX because unfolding requires this precision to produce meaningful results. Please note that this setting affects all JAX code in your Python process, not only caife, and that float64 computations can be considerably slower on some GPUs than float32 computations. To keep 32 bits, set the environment variable `JAX_ENABLE_X64=0` before importing caife; caife respects any explicit value of this variable.
 """
 __version__ = "0.0.5"
 
+import logging
+import os
+
 from jax import config
 
-# necessary for successful scipy.minimize
-config.update("jax_enable_x64", True) # TODO can we enable 64 bits locally, through dtypes?
+# enable 64 bits, which are necessary for meaningful unfolding results
+if "JAX_ENABLE_X64" not in os.environ and not config.jax_enable_x64:
+    config.update("jax_enable_x64", True)
+    logging.getLogger(__name__).info(
+        "caife has enabled 64-bit precision in JAX, which affects all JAX code in this process. To keep 32 bits, set the environment variable JAX_ENABLE_X64=0 before importing caife.")
 
 
 from .losses import (  # noqa: I001

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import traceback
+import warnings
 from dataclasses import dataclass, field
 
 import jax
@@ -48,6 +49,11 @@ class ScipySolver(AbstractSolver):
 
     def __post_init__(self):
         AbstractSolver.__post_init__(self)
+        if not jax.config.jax_enable_x64:
+            warnings.warn(
+                "JAX runs with 32-bit precision, which can render unfolding results unreliable. Unless you have deliberately chosen 32 bits, unset the environment variable JAX_ENABLE_X64 or set JAX_ENABLE_X64=1.",
+                stacklevel=3, # point to the user code that creates the solver
+            )
 
         # create all derivatives
         self.latent_nll_ = jax.jit(self.latent_nll_)
