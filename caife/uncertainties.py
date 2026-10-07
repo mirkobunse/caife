@@ -1,6 +1,7 @@
 """Module containing estimators of uncertainty."""
 
 import jax
+import jax.flatten_util
 import numpy as np
 
 

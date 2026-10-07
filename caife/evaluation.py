@@ -1,6 +1,7 @@
 """Module containing scores for the evaluation of a model's results."""
 
 import jax
+import jax.flatten_util
 import numpy as np
 
 from .utils.pytree import promote_structure

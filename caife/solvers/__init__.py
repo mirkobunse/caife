@@ -8,6 +8,7 @@ from itertools import compress
 from typing import NamedTuple
 
 import jax
+import jax.flatten_util
 import numpy as np
 
 

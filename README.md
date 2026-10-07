@@ -11,21 +11,11 @@ pip install --upgrade pip setuptools wheel
 pip install 'caife @ git+https://github.com/mirkobunse/caife'
 ```
 
-Moreover, you will need a [JAX](https://jax.readthedocs.io/) backend. Typically, the CPU backend will be ideal:
+You also might consider installing a GPU-powered [JAX](https://jax.readthedocs.io/) backend.
 
-```sh
-pip install "jax[cpu]"
-```
 
 ## Usage
 
-For a quickstart quide, see the Jupyter notebook at `examples/quickstart.ipynb`.
+For a quickstart guide, see the Jupyter notebook at [`examples/quickstart.ipynb`](https://github.com/mirkobunse/caife/blob/main/examples/quickstart.ipynb).
 
 For more detailed information, visit [the documentation](https://mirkobunse.github.io/caife).
-
-To build the documentation locally, issue the following commands and open `docs/build/html/index.html` in your browser.
-
-```bash
-venv/bin/pip install -e .[docs]
-venv/bin/sphinx-build -M html docs/source docs/build
-```
