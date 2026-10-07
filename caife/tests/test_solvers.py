@@ -4,6 +4,7 @@ from functools import partial
 from unittest import TestCase
 
 import numpy as np
+from jax import numpy as jnp
 
 import caife
 
@@ -147,6 +148,18 @@ class TestAbstractSolver(TestCase):
             for latent_result in aux["latent_results"]:
                 self.assertEqual(latent_result.value, -1)
                 self.assertEqual(latent_result.aux, {"value": -1})
+
+
+class TestMinimize(TestCase):
+    def test_failing_derivative(self):
+        # the gradient of sqrt is NaN at a negative starting point; the failure is logged
+        # instead of raised, and the starting point is returned as an intermediate result
+        with self.assertLogs("caife.solvers.scipy", level="WARNING") as logs:
+            opt = caife.solvers.scipy.minimize(lambda x: jnp.sum(jnp.sqrt(x)), np.array([-1.]))
+        self.assertEqual(len(logs.records), 1)
+        self.assertIn("DerivativeError", logs.output[0])
+        self.assertFalse(opt.success)
+        np.testing.assert_array_equal(opt.x, [-1.])
 
 
 if __name__ == '__main__':

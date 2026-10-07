@@ -49,6 +49,11 @@ class TestLinearCountModel(TestCase):
         model.fit(X, y)
         self.assertEqual(model.A_.shape, (6, 4))
 
+        # systematics are ignored with a warning that points to the call of fit
+        with self.assertWarnsRegex(UserWarning, "LinearSystematicsCountModel") as context:
+            model.fit(X, y, systematics=rng.uniform(size=(1_000, 1)))
+        self.assertEqual(context.filename, __file__)
+
 
 class TestMultiTargetModel(TestCase):
     def test(self):
@@ -96,6 +101,11 @@ class TestMultiTargetModel(TestCase):
                 [ value ], # *args
             )
         model.fit(X, Y)
+
+        # systematics are ignored with a warning that points to the call of fit
+        with self.assertWarnsRegex(UserWarning, "MultiTargetSystematicsModel") as context:
+            model.fit(X, Y, systematics=rng.uniform(size=(1_000, 1)))
+        self.assertEqual(context.filename, __file__)
 
         # instantiate standard models as a reference
         model_a = caife.LinearCountModel(

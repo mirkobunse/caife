@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+import warnings
 from dataclasses import dataclass, field
 
 import jax
@@ -62,7 +63,10 @@ class MultiTargetModel(AbstractModel):
     def _fit_transfer(self, X, y, sample_weight, systematics):
         """Fit the constant transfer matrix `A`; `systematics`, if given, are ignored."""
         if systematics is not None:
-            print("WARNING: MultiTargetModel does not support systematics; chose another model")
+            warnings.warn(
+                "MultiTargetModel does not support systematics; use a MultiTargetSystematicsModel to model them",
+                stacklevel=3, # point to the user code that calls fit
+            )
         self.A_ = jnp.array(self.representation.fit_transform(
             X, y, sample_weight=sample_weight, n_classes=self.n_bins_multitarget))
 

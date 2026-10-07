@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+import warnings
 from dataclasses import dataclass, field
 
 import jax
@@ -58,7 +59,10 @@ class LinearCountModel(AbstractModel):
     def _fit_transfer(self, X, y, sample_weight, systematics):
         """Fit the constant transfer matrix `A`; `systematics`, if given, are ignored."""
         if systematics is not None:
-            print("WARNING: LinearCountModel does not support systematics; chose another model")
+            warnings.warn(
+                "LinearCountModel does not support systematics; use a LinearSystematicsCountModel to model them",
+                stacklevel=3, # point to the user code that calls fit
+            )
         A = self.representation.fit_transform( # constant; no systematics modeled
             X,
             y,

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import traceback
+import logging
 import warnings
 from dataclasses import dataclass, field
 
@@ -11,6 +11,8 @@ import numpy as np
 from scipy import optimize
 
 from . import AbstractSolver, LatentResult, is_valid_hessian, symmetrize_hessian_fn
+
+_logger = logging.getLogger(__name__)
 
 SOLVER_OPTIONS_FACTORY = lambda: {
     "gtol": 1e-8,
@@ -136,8 +138,9 @@ def minimize(
             options=solver_options,
             callback=state.callback(),
         )
-    except (DerivativeError, ValueError):
-        traceback.print_exc()
+    except (DerivativeError, ValueError) as e:
+        _logger.warning( # multi-start solvers treat the intermediate result as one trial
+            "The optimization stopped early (%s: %s); returning the last iterate", type(e).__name__, e)
         opt = state.get_state()
     return opt
 
