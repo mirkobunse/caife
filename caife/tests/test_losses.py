@@ -2,11 +2,11 @@ import unittest
 from unittest import TestCase
 
 import numpy as np
-from qunfold import TikhonovRegularization
 from sklearn.datasets import make_classification
 from sklearn.tree import DecisionTreeClassifier
 
 import caife
+from caife._qunfold import TikhonovRegularization
 
 
 class TestTikhonovRegularization(TestCase):

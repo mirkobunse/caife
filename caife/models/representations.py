@@ -8,8 +8,8 @@ from functools import partial
 from multiprocessing import Pool
 
 import numpy as np
-from qunfold import AbstractRepresentation
-from qunfold.methods import check_y, class_prevalences
+
+from .._qunfold import AbstractRepresentation, check_y, class_prevalences
 
 
 @dataclass

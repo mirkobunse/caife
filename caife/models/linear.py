@@ -9,8 +9,8 @@ import jax
 import numpy as np
 from jax import numpy as jnp
 from optax.losses import softmax_cross_entropy
-from qunfold import AbstractRepresentation
 
+from .._qunfold import AbstractRepresentation
 from ..solvers.scipy import minimize
 from . import AbstractModel
 from .latents import LatentSpectrum, LatentSystematics
