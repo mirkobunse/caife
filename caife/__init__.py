@@ -4,7 +4,7 @@ caife is a Python package for unfolding, the inverse problem of recovering a tar
 
 Importing caife enables 64-bit precision in JAX because unfolding requires this precision to produce meaningful results. Please note that this setting affects all JAX code in your Python process, not only caife, and that float64 computations can be considerably slower on some GPUs than float32 computations. To keep 32 bits, set the environment variable `JAX_ENABLE_X64=0` before importing caife; caife respects any explicit value of this variable.
 """
-__version__ = "0.0.5"
+__version__ = "0.0.5.dev2"
 
 import logging
 import os

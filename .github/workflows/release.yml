@@ -1,0 +1,76 @@
+name: Release
+
+# manual runs ("Run workflow" in the "Actions" tab) publish to TestPyPI, GitHub
+# releases publish to PyPI
+on:
+  workflow_dispatch:
+  release:
+    types: [ published ] # do not publish draft releases
+
+permissions:
+  contents: read
+
+jobs:
+
+  # build and check the distributions once; the other jobs only upload them
+  build:
+    name: Build distributions
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v7
+    - name: Set up Python
+      uses: actions/setup-python@v7
+      with:
+        python-version: "3.14"
+    - name: Build and check distributions
+      run: |
+        python -m pip install --upgrade pip build twine
+        python -m build
+        python -m twine check --strict dist/*
+    - name: Store the distributions
+      uses: actions/upload-artifact@v7
+      with:
+        name: distributions
+        path: dist/
+
+  # rehearse on TestPyPI
+  publish-testpypi:
+    name: Publish to TestPyPI
+    if: github.event_name == 'workflow_dispatch' # manually triggered
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: testpypi # must match the trusted publisher on test.pypi.org
+      url: https://test.pypi.org/project/caife/
+    permissions:
+      id-token: write
+    steps:
+    - name: Download the distributions
+      uses: actions/download-artifact@v8
+      with:
+        name: distributions
+        path: dist/
+    - name: Publish to TestPyPI
+      uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        repository-url: https://test.pypi.org/legacy/
+
+  # publish on PyPI
+  publish-pypi:
+    name: Publish to PyPI
+    if: github.event_name == 'release' # triggered by a GitHub release
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi # must match the trusted publisher on pypi.org
+      url: https://pypi.org/project/caife/
+    permissions:
+      id-token: write
+    steps:
+    - name: Download the distributions
+      uses: actions/download-artifact@v8
+      with:
+        name: distributions
+        path: dist/
+    - name: Publish to PyPI
+      uses: pypa/gh-action-pypi-publish@release/v1

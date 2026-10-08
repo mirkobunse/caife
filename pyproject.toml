@@ -22,7 +22,6 @@ keywords = [
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
@@ -56,3 +55,4 @@ version = { attr = "caife.__version__" }
 Documentation = "https://mirkobunse.github.io/caife"
 Repository = "https://github.com/mirkobunse/caife"
 Issues = "https://github.com/mirkobunse/caife/issues"
+Changelog = "https://github.com/mirkobunse/caife/releases"
