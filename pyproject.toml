@@ -40,7 +40,7 @@ dynamic = [ "version" ]
 [project.optional-dependencies]
 docs = [ "myst-parser", "scikit-learn", "sphinx-rtd-theme" ]
 tests = [ "scikit-learn" ]
-notebooks = [ "jupyter", "mpl_interactions[jupyter]", "pandas", "scikit-learn" ]
+notebooks = [ "jupyter", "mpl_interactions[jupyter]", "pandas", "scikit-learn", "tqdm" ]
 
 [tool.setuptools]
 include-package-data = false # the package has no data files; otherwise, the excluded tests return as data
