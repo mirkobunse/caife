@@ -27,6 +27,8 @@ This page documents the public API of `caife`, organized by the kind of unfoldin
 .. autoclass:: caife.LatentReshape
 
 .. autoclass:: caife.LatentSystematics
+
+.. autoclass:: caife.LatentIdentity
 ```
 
 ## Representations

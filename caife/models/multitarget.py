@@ -13,7 +13,7 @@ from jax import numpy as jnp
 from .._qunfold import AbstractRepresentation
 from ..solvers.scipy import minimize
 from . import AbstractModel
-from .latents import LatentReshape, LatentSpectrum, LatentSystematics
+from .latents import LatentIdentity, LatentReshape, LatentSpectrum, LatentSystematics
 
 
 @dataclass
@@ -131,6 +131,7 @@ class MultiTargetSystematicsModel(MultiTargetModel):
     Args:
         target_bins: A list of bin boundaries, one list per target quantity, each ranging from `-inf` to `inf`.
         representation: The data representation that is computed from the proxy features.
+        bound_systematics (optional): Whether to bound systematic parameters to the range of values encountered during training. Set to `False` to achieve more solutions that are numerically valid but might exhibit systematic parameters outside of the known value range. Defaults to `True`.
         C (optional): The regularization strength for each logistic regression model, with the behavior defined by scikit-learn. Defaults to `None` for no regularization.
         solver (optional): The `method` argument in `scipy.optimize.minimize`. Defaults to `"L-BFGS-B"`.
         solver_options (optional): The `options` argument in `scipy.optimize.minimize`. Defaults to `{"gtol": 1e-8, "maxiter": 10_000}`.
@@ -145,6 +146,7 @@ class MultiTargetSystematicsModel(MultiTargetModel):
         n_bins_multitarget: The total number of joint target bins, i.e., the product of `n_bins_per_target`.
         n_bins_per_target: The number of bins of each individual target quantity, as determined by `target_bins`.
     """
+    bound_systematics: bool = True
     C: float | None = None
     solver: str = "L-BFGS-B" # same as in sklearn's LogisticRegression
     solver_options: dict[str,object] = field(default_factory=lambda: {
@@ -224,12 +226,16 @@ class MultiTargetSystematicsModel(MultiTargetModel):
         )
 
     def create_latents(self, X):
+        if self.bound_systematics:
+            latent_systematics = LatentSystematics(bounds=self.systematic_bounds)
+        else:
+            latent_systematics = LatentIdentity(bounds=self.systematic_bounds)
         return ( # create a tuple of latents such that params = (f, s)
             LatentReshape(
                 LatentSpectrum(n_samples=len(X), n_bins_target=self.n_bins_multitarget),
                 self.n_bins_per_target, # = shape
             ),
-            LatentSystematics(bounds=self.systematic_bounds),
+            latent_systematics,
         )
 
     def __call__(self, params):

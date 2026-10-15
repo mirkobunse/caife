@@ -13,7 +13,7 @@ from jax import numpy as jnp
 from .._qunfold import AbstractRepresentation
 from ..solvers.scipy import minimize
 from . import AbstractModel
-from .latents import LatentSpectrum, LatentSystematics
+from .latents import LatentIdentity, LatentSpectrum, LatentSystematics
 
 
 @dataclass
@@ -118,6 +118,7 @@ class LinearSystematicsCountModel(LinearCountModel):
     Args:
         target_bins: Bin boundaries of the target quantity, shape (n_target_bins+1,).
         representation: The data representation that is computed from the proxy features.
+        bound_systematics (optional): Whether to bound systematic parameters to the range of values encountered during training. Set to `False` to achieve more solutions that are numerically valid but might exhibit systematic parameters outside of the known value range. Defaults to `True`.
         C (optional): The regularization strength for each logistic regression model, with the behavior defined by scikit-learn. Defaults to `None` for no regularization.
         solver (optional): The `method` argument in `scipy.optimize.minimize`. Defaults to "L-BFGS-B".
         solver_options (optional): The `options` argument in `scipy.optimize.minimize`. Defaults to `{ "gtol": 1e-8, "maxiter": 10_000 }`.
@@ -131,6 +132,7 @@ class LinearSystematicsCountModel(LinearCountModel):
         n_background_samples: Number of background samples, set during `fit` but meant to be manually changed to the actual number of background samples after fitting.
         n_bins_target: Number of target bins, as determined by the `target_bins`.
     """
+    bound_systematics: bool = True
     C: float | None = None
     solver: str = "L-BFGS-B" # same as in sklearn's LogisticRegression
     solver_options: dict[str,object] = field(default_factory=lambda: {
@@ -210,9 +212,13 @@ class LinearSystematicsCountModel(LinearCountModel):
         )
 
     def create_latents(self, X):
+        if self.bound_systematics:
+            latent_systematics = LatentSystematics(bounds=self.systematic_bounds)
+        else:
+            latent_systematics = LatentIdentity(bounds=self.systematic_bounds)
         return ( # create a tuple of latents such that params = (f, s)
             LatentSpectrum(n_samples=len(X), n_bins_target=self.n_bins_target),
-            LatentSystematics(bounds=self.systematic_bounds),
+            latent_systematics,
         )
 
     def __call__(self, params):
