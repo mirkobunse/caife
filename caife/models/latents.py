@@ -92,19 +92,3 @@ class LatentSystematics(AbstractLatentVector):
         # draw logits, each uniformly distributed after applying a sigmoid
         uniform = rng.uniform(size=self.bounds.shape[0])
         return jnp.log(uniform / (1 - uniform))
-
-
-@dataclass
-class LatentIdentity(AbstractLatentVector):
-    """Does not transform a latent variable. As a consequence, latent and target spaces are identical.
-
-    Args:
-        bounds: The minimum and maximum value for each parameter, shape (n_parameters, 2). Used only to uniformly draw a starting point from within these bounds; not used to constrain the parameters during a fit.
-    """
-    bounds: ArrayLike
-
-    def __call__(self, ell):
-        return ell
-
-    def create_starting_point(self, rng=None):
-        return rng.uniform(low=self.bounds[:,0], high=self.bounds[:,1])
