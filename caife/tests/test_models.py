@@ -275,7 +275,7 @@ class TestMultiTargetSystematicsModel(TestCase):
         self.assertEqual(model.heads_.shape, (n_bins_proxy, n_bins_multitarget, n_systematics))
         self.assertEqual(model.intercept_.shape, (n_bins_proxy, n_bins_multitarget))
 
-        # each column of A(s) is a proxy distribution and therefore sums to one
+        # each column of A(z) is a proxy distribution and therefore sums to one
         A = np.asarray(model.A(np.array([0.])))
         self.assertEqual(A.shape, (n_bins_proxy, n_bins_multitarget))
         np.testing.assert_allclose(
@@ -293,6 +293,28 @@ class TestMultiTargetSystematicsModel(TestCase):
         g_pred = model((f, np.array([0.])))
         self.assertEqual(g_pred.shape, (self.representation.n_output_features,))
         self.assertTrue(np.all(np.asarray(g_pred) >= 0))
+
+    def test_combinations(self):
+        # with rank < n_systematics, only z can be identified from data, not s
+        rng = np.random.default_rng(1491)
+        n_samples = 20_000
+        Y = rng.uniform(size=(n_samples, 2)) * 4
+        S = rng.uniform(-1, 1, size=(n_samples, 3))
+        X = np.stack((
+            Y[:, 0] + .5 * S[:, 0] + .3 * S[:, 1] + rng.normal(size=n_samples),
+            Y[:, 1] + .5 * S[:, 2] + .2 * S[:, 1] + rng.normal(size=n_samples),
+        )).T
+        model = caife.MultiTargetSystematicsModel(
+            self.target_bins,
+            self.representation,
+            max_rank=1,
+            solver_options={"gtol": 1e-6, "maxiter": 1_000},
+        ).fit(X, Y, systematics=S)
+        self.assertEqual(model.trunk_.shape, (1, 3))
+
+        # the latents and the model use z
+        latents = model.create_latents(X)
+        np.testing.assert_array_equal(latents[1].bounds, model.combination_bounds)
 
 
 if __name__ == '__main__':

@@ -124,24 +124,25 @@ class MultiTargetModel(AbstractModel):
 
 @dataclass
 class MultiTargetSystematicsModel(MultiTargetModel):
-    """Systematics-aware `MultiTargetModel`, solving `g = A(s) @ f + b` over a joint, multi-dimensional target spectrum `f` and a vector of systematic parameters `s`.
+    """Systematics-aware `MultiTargetModel`, solving `g = A(z) @ f + b` over a joint, multi-dimensional target spectrum `f` and low-rank combinations `z` of a vector of systematic parameters `s`.
 
-    As in `LinearSystematicsCountModel`, each column of `A(s)` (representing the mean feature embedding of one joint target bin) is modeled as one logistic regression that takes `s` as its input, so that each column stays properly normalized to a unit sum and varies monotonically with each entry of `s`. As in `MultiTargetModel`, the target quantities are first combined into a single joint class label, over which this logistic regression is fitted, so that `A(s)` has shape `(n_bins_proxy, n_bins_multitarget)` and `f` has shape `tuple(n_bins_per_target)`.
+    As in `LinearSystematicsCountModel`, each column of `A(z)` (representing the mean feature embedding of one joint target bin) is modeled as one logistic regression that takes `z = trunk_ @ s` as its input, so that each column stays properly normalized to a unit sum and varies monotonically with each entry of `z`. As in `MultiTargetModel`, the target quantities are first combined into a single joint class label, over which this logistic regression is fitted, so that `A` has shape `(n_bins_proxy, n_bins_multitarget)` and `f` has shape `tuple(n_bins_per_target)`.
 
     Args:
         target_bins: A list of bin boundaries, one list per target quantity, each ranging from `-inf` to `inf`.
         representation: The data representation that is computed from the proxy features.
         solver (optional): The `method` argument in `scipy.optimize.minimize`. Defaults to `"L-BFGS-B"`.
         solver_options (optional): The `options` argument in `scipy.optimize.minimize`. Defaults to `{"gtol": 1e-8, "maxiter": 10_000}`.
-        max_rank (optional): The maximum rank of a low-rank factorization of the systematic slopes of the logistic regressions; their intercepts are not factorized. Defaults to `None` for no restriction.
+        max_rank (optional): The maximum rank of a low-rank factorization of the systematic slopes of the logistic regressions; their intercepts are not factorized. With a rank that is smaller than the number of systematic parameters, `s` cannot be identified from data, only the `rank` combinations `z`. Defaults to `None` for no restriction, i.e., for as many combinations as systematic parameters.
         seed (optional): The random seed for the initialization of the low-rank approximation. Defaults to `1491`.
 
     Attributes:
-        trunk_: The fitted trunk of the low-rank factorization of the systematic slopes, i.e., the directions in the space of standardized systematics that affect `A(s)`, shape `(rank, n_systematic_parameters)`. Set during `fit`.
+        trunk_: The fitted trunk of the low-rank factorization of the systematic slopes, i.e., the directions in the space of standardized systematics that affect `A(z)`, shape `(rank, n_systematic_parameters)`. Set during `fit`.
         heads_: The fitted heads of the low-rank factorization of the systematic slopes, i.e., the per-cell effects of each direction, shape `(n_bins_proxy, n_bins_multitarget, rank)`. Set during `fit`.
-        intercept_: The fitted intercepts of the logistic regressions, i.e., the logits of `A(s)` at the center of the training range of the systematics, shape `(n_bins_proxy, n_bins_multitarget)`. Set during `fit`.
-        A_mask: A boolean mask of shape `(n_bins_proxy, n_bins_multitarget)`, marking the proxy/target bin combinations that were actually observed while fitting; `A(s)` is only meaningful for these entries. Set during `fit`.
+        intercept_: The fitted intercepts of the logistic regressions, i.e., the logits of `A(0)`, shape `(n_bins_proxy, n_bins_multitarget)`. Set during `fit`.
+        A_mask: A boolean mask of shape `(n_bins_proxy, n_bins_multitarget)`, marking the proxy/target bin combinations that were actually observed while fitting. Set during `fit`.
         systematic_bounds: The per-parameter `(min, max)` bounds observed in the training `systematics`, shape `(n_systematic_parameters, 2)`. Set during `fit`.
+        combination_bounds: The per-combination `(min, max)` bounds of the combinations `z` of the training `systematics`, shape `(rank, 2)`. These bounds constrain `z` during unfolding. Set during `fit`.
         opt_: The `scipy.optimize.OptimizeResult` of fitting the logistic regressions, with an additional `wallclock_time` attribute. Set during `fit`.
         g_background_: The fitted background proxy distribution `b`, shape `(n_bins_proxy,)`. Set during `fit`.
         n_background_samples: Number of background samples, set during `fit` but meant to be manually changed to the actual number of background samples after fitting.
@@ -158,7 +159,7 @@ class MultiTargetSystematicsModel(MultiTargetModel):
     seed: int | None = 1491
 
     def _fit_transfer(self, X, y, sample_weight=None, systematics=None):
-        """Fit the systematics-dependent transfer matrix `A(s)` via per-column logistic regression."""
+        """Fit the systematics-dependent transfer matrix `A(z)` via per-column logistic regression."""
         if systematics is None:
             raise ValueError("No systematics given; use a MultiTargetModel instead")
         X = self.representation.fit_transform(
@@ -243,19 +244,35 @@ class MultiTargetSystematicsModel(MultiTargetModel):
         self.opt_.wallclock_time = time.time() - t_init
         self.trunk_, self.heads_, self.intercept_ = unravel_fn(
             self.opt_.x) # optimized coefficients
+        z = np.asarray(systematics @ self.trunk_.T) # training combinations
+        self.combination_bounds = np.stack((z.min(axis=0), z.max(axis=0))).T
 
-    def A(self, s):
-        logits = jnp.einsum( # p=n_bins_proxy, t=n_bins_multitarget, s=n_systematic_params
-            "rs,ptr,s->pt",
-            self.trunk_,
-            self.heads_,
-            self._standardize_systematics(s),
-        ) + self.intercept_
+    def A(self, z):
+        """Compute the transfer matrix from the combinations `z` of systematic parameters.
+
+        Args:
+            z: The combinations of systematic parameters, shape `(rank,)`; see `combinations`.
+
+        Returns:
+            The transfer matrix `A`, shape `(n_bins_proxy, n_bins_multitarget)`.
+        """
+        logits = jnp.einsum("ptr,r->pt", self.heads_, z) + self.intercept_ # p=n_bins_proxy, t=n_bins_multitarget
         return jax.nn.softmax(
             logits,
             axis=0, # for each target bin, apply softmax over all proxy bins
             where=self.A_mask,
         )
+
+    def combinations(self, s):
+        """Compute the combinations `z = trunk_ @ standardized(s)` of systematic parameters, on which the transfer matrix `A(z)` depends.
+
+        Args:
+            s: Systematic parameters in their original units, shape `(n_systematic_parameters,)` or `(n_samples, n_systematic_parameters)`.
+
+        Returns:
+            The combinations `z`, shape `(rank,)` or `(n_samples, rank)`.
+        """
+        return self._standardize_systematics(s) @ self.trunk_.T
 
     def _standardize_systematics(self, s):
         # map each systematic to [-1, 1], to improve the conditioning of the fit
@@ -263,15 +280,15 @@ class MultiTargetSystematicsModel(MultiTargetModel):
             self.systematic_bounds[:,1] - self.systematic_bounds[:,0]) - 1
 
     def create_latents(self, X):
-        return ( # create a tuple of latents such that params = (f, s)
+        return ( # create a tuple of latents such that params = (f, z)
             LatentReshape(
                 LatentSpectrum(n_samples=len(X), n_bins_target=self.n_bins_multitarget),
                 self.n_bins_per_target, # = shape
             ),
-            LatentSystematics(bounds=self.systematic_bounds),
+            LatentSystematics(bounds=self.combination_bounds),
         )
 
     def __call__(self, params):
-        f, s = params # f has shape tuple(self.n_bins_per_target)
-        g_pred = self.A(s) @ f.reshape(-1) + self.g_background_
+        f, z = params # f has shape tuple(self.n_bins_per_target)
+        g_pred = self.A(z) @ f.reshape(-1) + self.g_background_
         return g_pred
