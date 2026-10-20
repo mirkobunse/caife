@@ -133,11 +133,13 @@ class MultiTargetSystematicsModel(MultiTargetModel):
         representation: The data representation that is computed from the proxy features.
         solver (optional): The `method` argument in `scipy.optimize.minimize`. Defaults to `"L-BFGS-B"`.
         solver_options (optional): The `options` argument in `scipy.optimize.minimize`. Defaults to `{"gtol": 1e-8, "maxiter": 10_000}`.
-        max_rank (optional): The maximum rank of a low-rank approximation of the transfer function. Defaults to `None`.
+        max_rank (optional): The maximum rank of a low-rank factorization of the systematic slopes of the logistic regressions; their intercepts are not factorized. Defaults to `None` for no restriction.
         seed (optional): The random seed for the initialization of the low-rank approximation. Defaults to `1491`.
 
     Attributes:
-        coeffs_: The fitted coefficients of the per-column logistic regressions, shape `(n_bins_proxy, n_bins_multitarget, n_systematic_parameters + 1)`. Set during `fit`.
+        trunk_: The fitted trunk of the low-rank factorization of the systematic slopes, i.e., the directions in the space of standardized systematics that affect `A(s)`, shape `(rank, n_systematic_parameters)`. Set during `fit`.
+        heads_: The fitted heads of the low-rank factorization of the systematic slopes, i.e., the per-cell effects of each direction, shape `(n_bins_proxy, n_bins_multitarget, rank)`. Set during `fit`.
+        intercept_: The fitted intercepts of the logistic regressions, i.e., the logits of `A(s)` at the center of the training range of the systematics, shape `(n_bins_proxy, n_bins_multitarget)`. Set during `fit`.
         A_mask: A boolean mask of shape `(n_bins_proxy, n_bins_multitarget)`, marking the proxy/target bin combinations that were actually observed while fitting; `A(s)` is only meaningful for these entries. Set during `fit`.
         systematic_bounds: The per-parameter `(min, max)` bounds observed in the training `systematics`, shape `(n_systematic_parameters, 2)`. Set during `fit`.
         opt_: The `scipy.optimize.OptimizeResult` of fitting the logistic regressions, with an additional `wallclock_time` attribute. Set during `fit`.
@@ -173,13 +175,10 @@ class MultiTargetSystematicsModel(MultiTargetModel):
             sample_weight = sample_weight[is_finite]
 
         # fit parameters of logistic regressions that estimate A for systematics
-        # A[p,t] ~ softmax_t(<a, (s, 1)>) with a = (a', b)
+        # A[p,t] ~ softmax_p(intercept[p,t] + <heads[p,t], trunk @ z>) for standardized systematics z
         self.systematic_bounds = np.stack(
             (systematics.min(axis=0), systematics.max(axis=0))).T
-        systematics = jnp.concatenate( # append a one-column for the bias term
-            (systematics, jnp.ones((systematics.shape[0], 1))),
-            axis=1,
-        )
+        systematics = self._standardize_systematics(systematics)
         target_mask = jax.nn.one_hot(y, self.n_bins_multitarget)
 
         # check where the full matrix is sufficiently populated
@@ -206,19 +205,28 @@ class MultiTargetSystematicsModel(MultiTargetModel):
             self.n_bins_multitarget, # = t = n_bins_multitarget
             rank, # = r
         )
+        intercept_shape = (
+            X.shape[1], # = p = n_bins_proxy
+            self.n_bins_multitarget, # = t = n_bins_multitarget
+        )
         x0, unravel_fn = jax.flatten_util.ravel_pytree([
             np.random.default_rng(self.seed).normal( # initial guess for the trunk
                 scale=1/systematics.shape[1], size=trunk_shape),
             np.zeros(heads_shape), # initial guess for the heads
+            np.zeros(intercept_shape), # initial guess for the intercepts
         ])
         def loss_fn(params):
-            trunk, heads = unravel_fn(params)
+            trunk, heads, intercept = unravel_fn(params)
             logits = jnp.einsum( # compute logits for each sample
                 "rs,ptr,ns,nt->np", # n = n_samples
                 trunk, # shape (r, s), see above
                 heads, # shape (p, t, r), see above
                 systematics, # shape (n, s)
                 target_mask, # shape (n, t)
+            ) + jnp.einsum( # apply the intercept
+                "pt,nt->np",
+                intercept,
+                target_mask,
             )
             loss = jnp.average( # softmax cross entropy w.r.t. the one-hot encoding X of proxy bins
                 -jnp.sum(X * jax.nn.log_softmax(logits), axis=-1),
@@ -233,19 +241,26 @@ class MultiTargetSystematicsModel(MultiTargetModel):
             solver_options=self.solver_options,
         )
         self.opt_.wallclock_time = time.time() - t_init
-        self.trunk_, self.heads_ = unravel_fn(self.opt_.x) # optimized coefficients
+        self.trunk_, self.heads_, self.intercept_ = unravel_fn(
+            self.opt_.x) # optimized coefficients
 
     def A(self, s):
-        return jax.nn.softmax( # p=n_bins_proxy, t=n_bins_multitarget, s=n_systematic_params
-            jnp.einsum(
-                "rs,ptr,s->pt",
-                self.trunk_,
-                self.heads_,
-                jnp.concatenate((s, jnp.ones(1)))
-            ),
+        logits = jnp.einsum( # p=n_bins_proxy, t=n_bins_multitarget, s=n_systematic_params
+            "rs,ptr,s->pt",
+            self.trunk_,
+            self.heads_,
+            self._standardize_systematics(s),
+        ) + self.intercept_
+        return jax.nn.softmax(
+            logits,
             axis=0, # for each target bin, apply softmax over all proxy bins
             where=self.A_mask,
         )
+
+    def _standardize_systematics(self, s):
+        # map each systematic to [-1, 1], to improve the conditioning of the fit
+        return 2 * (s - self.systematic_bounds[:,0]) / (
+            self.systematic_bounds[:,1] - self.systematic_bounds[:,0]) - 1
 
     def create_latents(self, X):
         return ( # create a tuple of latents such that params = (f, s)

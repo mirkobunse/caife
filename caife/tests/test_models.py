@@ -270,10 +270,10 @@ class TestMultiTargetSystematicsModel(TestCase):
 
         np.testing.assert_array_equal(model.n_bins_per_target, [4, 4])
         self.assertEqual(n_bins_multitarget, 16)
-        self.assertEqual(
-            model.coeffs_.shape,
-            (n_bins_proxy, n_bins_multitarget, self.S.shape[1] + 1),
-        )
+        n_systematics = self.S.shape[1]
+        self.assertEqual(model.trunk_.shape, (n_systematics, n_systematics)) # full rank
+        self.assertEqual(model.heads_.shape, (n_bins_proxy, n_bins_multitarget, n_systematics))
+        self.assertEqual(model.intercept_.shape, (n_bins_proxy, n_bins_multitarget))
 
         # each column of A(s) is a proxy distribution and therefore sums to one
         A = np.asarray(model.A(np.array([0.])))
