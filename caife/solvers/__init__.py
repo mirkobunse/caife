@@ -157,7 +157,9 @@ class AbstractSolver(ABC):
             i_best = np.argmin([l.value for l in compress(latent_results, is_valid)])
             result = list(compress(results, is_valid))[i_best]
             ell = list(compress(latent_results, is_valid))[i_best].ell
-            aux = list(compress(latent_results, is_valid))[i_best].aux | {"ell": ell}
+            value = list(compress(latent_results, is_valid))[i_best].value
+            aux = list(compress(latent_results, is_valid))[i_best].aux | {
+                "ell": ell, "value": value}
         if return_aux:
             aux = aux | { # update aux
                 "results": results,
