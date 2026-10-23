@@ -7,6 +7,7 @@ from dataclasses import dataclass
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 from numpy.typing import ArrayLike
 
 
@@ -43,15 +44,25 @@ class LatentSpectrum(AbstractLatentVector):
     Args:
         n_samples: The desired number of samples.
         n_bins_target: The number of target bins.
+        bin_groups (optional): A group number for each target bin, shape `(n_bins_target,)`. All bins of a group share one latent variable and, hence, have equal counts. The group with the smallest number, e.g., `-1` in `create_bin_groups`, has a fixed latent value of zero. Defaults to `None` for one group per bin.
     """
     n_samples: int
     n_bins_target: int
     bin_groups: ArrayLike | None = None
 
+    def __post_init__(self):
+        if self.bin_groups is not None:
+            if len(self.bin_groups) != self.n_bins_target:
+                raise ValueError("len(bin_groups) != n_bins_target")
+            _, self._bin_group_map = np.unique(
+                np.asarray(self.bin_groups),
+                return_inverse=True,
+            )
+
     def __call__(self, ell):
         exp_ell = jnp.concatenate((jnp.ones(1), jnp.exp(ell)))
-        if self.bin_groups is not None:
-            exp_ell = exp_ell[self.bin_groups + 1]
+        if self.bin_groups is not None: # one value per group -> one value per bin
+            exp_ell = exp_ell[self._bin_group_map]
         return self.n_samples * (exp_ell / exp_ell.sum())
 
     @staticmethod
@@ -59,13 +70,14 @@ class LatentSpectrum(AbstractLatentVector):
         return jnp.arange(n_bins_target) - 1 # first index is -1 = non-fittable
 
     def create_starting_point(self, rng=None):
+        if self.bin_groups is None: # determine the number of classes
+            n_classes = self.n_bins_target
+        else:
+            n_classes = self._bin_group_map.max() + 1
+
         # draw logits that are uniformly distributed after applying a softmax
-        logits = jnp.log(rng.exponential(size=self.n_bins_target))
-        starting_point = logits[1:] - logits[0] # fix the first dimension to zero
-        if self.bin_groups is not None:
-            starting_point = starting_point[jnp.unique(
-                self.bin_groups[self.bin_groups >= 0])]
-        return starting_point
+        logits = jnp.log(rng.exponential(size=n_classes))
+        return logits[1:] - logits[0] # fix the first dimension to zero
 
 
 @dataclass
