@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 import jax
 import numpy as np
 from jax import numpy as jnp
+from numpy.typing import ArrayLike
 
 from .._qunfold import AbstractRepresentation
 from ..solvers.scipy import minimize
@@ -27,6 +28,7 @@ class MultiTargetModel(AbstractModel):
     Args:
         target_bins: A list of bin boundary vectors, one vector per target quantity, each ranging from `-inf` to `inf`.
         representation: The data representation that is computed from the proxy features.
+        bin_groups (optional): A group number for each target bin, shape `tuple(n_bins_per_target)`. All bins of a group are modeled as a single joint class and, hence, share all information. Defaults to `None` for one group per bin.
 
     Attributes:
         A_: The fitted transfer matrix `A`, shape `(n_bins_proxy, n_bins_multitarget)`. Set during `fit`.
@@ -37,6 +39,20 @@ class MultiTargetModel(AbstractModel):
     """
     target_bins: list[list[float]]
     representation: AbstractRepresentation
+    bin_groups: ArrayLike | None = None
+
+    def __post_init__(self):
+        if self.bin_groups is not None:
+            if self.bin_groups.shape != self.n_bins_per_target:
+                raise ValueError("bin_groups.shape != n_bins_per_target")
+            keys, bin_group_map, counts = np.unique(
+                self.bin_groups,
+                return_inverse=True, # the index of each bin's group among all distinct groups
+                return_counts=True,
+            )
+            self._bin_group_map = bin_group_map.reshape(-1) # one index per flattened bin
+            self._bin_group_keys = jnp.array(keys)
+            self._bin_group_counts = jnp.array(counts)
 
     def fit(self, X, y, sample_weight=None, systematics=None, background=None):
         for b_i in self.target_bins:
@@ -80,6 +96,10 @@ class MultiTargetModel(AbstractModel):
             weights=sample_weight,
             minlength=self.n_bins_multitarget,
         )
+        if self.bin_groups is not None: # replicate groups
+            f_full = np.zeros(np.prod(self.n_bins_per_target))
+            f_full[self.bin_groups.reshape(-1)] = f
+            f = f_full
         return f.reshape(self.n_bins_per_target) * (y.shape[0] / f.sum()) # scale to counts
 
     def represent_targets(self, y, separate=False):
@@ -93,16 +113,29 @@ class MultiTargetModel(AbstractModel):
         if separate:
             return y
         factors = np.concatenate(([1], np.cumprod(self.n_bins_per_target[::-1][:-1])))
-        return np.sum(y[:,::-1] * factors, axis=1)
+        y = np.sum(y[:,::-1] * factors, axis=1)
+        if self.bin_groups is not None: # drop replicated classes
+            y = self._bin_group_map[y]
+        return y
 
     def create_latents(self, X): # create a single latent such that params = f
+        bin_groups = None
+        if self.bin_groups is not None:
+            bin_groups = self.bin_groups.reshape(-1) - 1 # -1 for fixed parameter
         return LatentReshape(
-            LatentSpectrum(n_samples=len(X), n_bins_target=self.n_bins_multitarget),
+            LatentSpectrum(
+                n_samples=len(X),
+                n_bins_target=np.prod(self.n_bins_per_target),
+                bin_groups=bin_groups,
+            ),
             self.n_bins_per_target, # = shape
         )
 
     def __call__(self, f): # f = params with shape tuple(self.n_bins_per_target)
-        g_pred = self.A_ @ f.reshape(-1) + self.g_background_
+        f = f.reshape(-1)
+        if self.bin_groups is not None:
+            f = f[self._bin_group_keys] * self._bin_group_counts
+        g_pred = self.A_ @ f + self.g_background_
         return g_pred
 
     @property
@@ -115,11 +148,18 @@ class MultiTargetModel(AbstractModel):
 
     @property
     def n_bins_multitarget(self):
+        if self.bin_groups is not None:
+            return len(np.unique(self.bin_groups))
         return np.prod(self.n_bins_per_target)
 
     @property
     def n_bins_per_target(self):
-        return np.array([len(x)-1 for x in self.target_bins])
+        return tuple(len(x)-1 for x in self.target_bins)
+
+    @staticmethod
+    def create_bin_groups(target_bins):
+        n_bins_per_target = np.array([len(x)-1 for x in target_bins])
+        return np.arange(np.prod(n_bins_per_target)).reshape(n_bins_per_target)
 
 
 @dataclass

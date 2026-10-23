@@ -148,6 +148,96 @@ class TestMultiTargetModel(TestCase):
                 reference[i_a, i_b] = np.sum((y_a == i_a) & (y_b == i_b))
         np.testing.assert_equal(model.target_view(Y), reference)
 
+    def test_bin_groups(self):
+        rng = np.random.default_rng(1491)
+        Y = rng.uniform(size=(1_000, 2)) * 4
+        X = np.stack((
+            (Y[:,0] + rng.normal(size=1_000)),
+            (Y[:,1] + rng.normal(size=1_000)),
+        )).T
+        representation = caife.GridBinning([
+            np.concatenate(([-np.inf], np.arange(5), [np.inf])),
+            np.concatenate(([-np.inf], np.arange(3), [np.inf])),
+        ])
+        target_bins = [
+            np.arange(3, dtype=float), # 2 classes
+            np.arange(5, dtype=float), # 4 classes
+        ]
+        for b_i in target_bins:
+            b_i[0] = -np.inf
+            b_i[-1] = np.inf
+
+        # create_bin_groups
+        bin_groups = np.array(
+            caife.MultiTargetModel.create_bin_groups(target_bins))
+        self.assertEqual(bin_groups.shape, ((2, 4)))
+        bin_groups[:,0] = bin_groups[0,0]
+        bin_groups[:,-1] = bin_groups[0,-1]
+        np.testing.assert_array_equal(
+            bin_groups,
+            np.array([[0, 1, 2, 3], [0, 5, 6, 3]]),
+        )
+
+        # test the number of classes
+        model = caife.MultiTargetModel(
+            target_bins=target_bins,
+            representation=representation,
+            bin_groups=bin_groups,
+        )
+        self.assertEqual(
+            len(np.unique(model.represent_targets(Y))), # observed
+            len(np.unique(bin_groups)), # desired
+        )
+        np.testing.assert_array_equal(
+            model._bin_group_map,
+            [0, 1, 2, 3, 0, 4, 5, 3],
+        )
+
+        # test create_latents
+        latent = model.create_latents(X)
+        self.assertTrue(isinstance(latent, caife.LatentReshape))
+        self.assertTrue(isinstance(latent.latent_vector, caife.LatentSpectrum))
+        np.testing.assert_array_equal(
+            latent.latent_vector.bin_groups,
+            model.bin_groups.reshape(-1) - 1,
+        )
+        np.testing.assert_array_equal( # the latent maps bins to groups like the model does
+            latent.latent_vector._bin_group_map,
+            model._bin_group_map,
+        )
+        for _ in range(5):
+            ell = latent.create_starting_point(rng)
+            self.assertEqual(ell.shape, (5,)) # 6 groups, one of which is fixed
+            np.testing.assert_array_equal(
+                latent(ell)[:,0],
+                latent(ell)[0,0],
+            )
+            np.testing.assert_array_equal(
+                latent(ell)[:,-1],
+                latent(ell)[0,-1],
+            )
+            self.assertEqual( # no other bins are tied to each other
+                len(np.unique(latent(ell))),
+                len(np.unique(bin_groups)),
+            )
+
+        # test fit and apply
+        model.fit(X, Y)
+        self.assertEqual(
+            model.A_.shape,
+            (representation.n_output_features, 6), # there are 6 grouped classes
+        )
+        ell = latent.create_starting_point(rng)
+        g_est = model(latent(ell))
+        self.assertEqual(
+            g_est.shape,
+            (representation.n_output_features,),
+        )
+        self.assertAlmostEqual(
+            g_est.sum(),
+            latent(ell).sum(),
+        )
+
 
 class TestLinearSystematicsCountModel(TestCase):
     def setUp(self):
