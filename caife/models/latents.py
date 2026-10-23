@@ -67,7 +67,7 @@ class LatentSpectrum(AbstractLatentVector):
 
     @staticmethod
     def create_bin_groups(n_bins_target):
-        return jnp.arange(n_bins_target) - 1 # first index is -1 = non-fittable
+        return np.arange(n_bins_target) - 1 # first index is -1 = non-fittable
 
     def create_starting_point(self, rng=None):
         if self.bin_groups is None: # determine the number of classes
