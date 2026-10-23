@@ -46,10 +46,10 @@ class MultiTargetModel(AbstractModel):
             self.bin_groups = np.asarray(self.bin_groups) # also accept nested lists
             if self.bin_groups.shape != self.n_bins_per_target:
                 raise ValueError("bin_groups.shape != n_bins_per_target")
-            _, self._bin_group_map = np.unique(
+            self._bin_group_map = np.unique(
                 self.bin_groups,
                 return_inverse=True, # the index of each bin's group among all distinct groups
-            ).reshape(-1)
+            )[1].reshape(-1)
 
     def fit(self, X, y, sample_weight=None, systematics=None, background=None):
         for b_i in self.target_bins:
