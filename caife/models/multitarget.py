@@ -46,14 +46,10 @@ class MultiTargetModel(AbstractModel):
             self.bin_groups = np.asarray(self.bin_groups) # also accept nested lists
             if self.bin_groups.shape != self.n_bins_per_target:
                 raise ValueError("bin_groups.shape != n_bins_per_target")
-            keys, bin_group_map, counts = np.unique(
+            _, self._bin_group_map = np.unique(
                 self.bin_groups,
                 return_inverse=True, # the index of each bin's group among all distinct groups
-                return_counts=True,
-            )
-            self._bin_group_map = bin_group_map.reshape(-1) # one index per flattened bin
-            self._bin_group_keys = jnp.array(keys)
-            self._bin_group_counts = jnp.array(counts)
+            ).reshape(-1)
 
     def fit(self, X, y, sample_weight=None, systematics=None, background=None):
         for b_i in self.target_bins:
@@ -98,7 +94,8 @@ class MultiTargetModel(AbstractModel):
             minlength=self.n_bins_multitarget,
         )
         if self.bin_groups is not None: # split each group evenly across its bins, like the latents do
-            f = f[self._bin_group_map] / np.asarray(self._bin_group_counts)[self._bin_group_map]
+            group_sizes = np.bincount(self._bin_group_map) # the number of bins in each group
+            f = f[self._bin_group_map] / group_sizes[self._bin_group_map]
         return f.reshape(self.n_bins_per_target) * (y.shape[0] / f.sum()) # scale to counts
 
     def represent_targets(self, y, separate=False):
@@ -133,7 +130,9 @@ class MultiTargetModel(AbstractModel):
     def __call__(self, f): # f = params with shape tuple(self.n_bins_per_target)
         f = f.reshape(-1)
         if self.bin_groups is not None:
-            f = f[self._bin_group_keys] * self._bin_group_counts
+            # sum the counts of each group: .at[pos].add(f) adds the count of each bin to the position
+            # of its group; repeated positions accumulate, so that each group receives the sum
+            f = jnp.zeros(self.n_bins_multitarget).at[self._bin_group_map].add(f)
         g_pred = self.A_ @ f + self.g_background_
         return g_pred
 
@@ -271,7 +270,7 @@ class MultiTargetSystematicsModel(MultiTargetModel):
     def __call__(self, params):
         f, s = params # f has shape tuple(self.n_bins_per_target)
         f = f.reshape(-1)
-        if self.bin_groups is not None:
-            f = f[self._bin_group_keys] * self._bin_group_counts
+        if self.bin_groups is not None: # sum the counts of each group, see MultiTargetModel.__call__
+            f = jnp.zeros(self.n_bins_multitarget).at[self._bin_group_map].add(f)
         g_pred = self.A(s) @ f + self.g_background_
         return g_pred

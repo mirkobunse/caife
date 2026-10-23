@@ -251,6 +251,18 @@ class TestMultiTargetModel(TestCase):
             latent(ell).sum(),
         )
 
+        # the group numbers do not matter, only the grouping; here, the same groups are numbered
+        # consecutively, so that the group numbers are no longer flat indices of member bins
+        _, renumbered_groups = np.unique(bin_groups, return_inverse=True)
+        renumbered_groups = renumbered_groups.reshape(bin_groups.shape)
+        np.testing.assert_array_equal(renumbered_groups, [[0, 1, 2, 3], [0, 4, 5, 3]])
+        renumbered_model = caife.MultiTargetModel(
+            target_bins=target_bins,
+            representation=representation,
+            bin_groups=renumbered_groups,
+        ).fit(X, Y)
+        np.testing.assert_allclose(renumbered_model(latent(ell)), g_est)
+
 
 class TestLinearSystematicsCountModel(TestCase):
     def setUp(self):
