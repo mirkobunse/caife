@@ -168,8 +168,7 @@ class TestMultiTargetModel(TestCase):
             b_i[-1] = np.inf
 
         # create_bin_groups
-        bin_groups = np.array(
-            caife.MultiTargetModel.create_bin_groups(target_bins))
+        bin_groups = caife.MultiTargetModel.create_bin_groups(target_bins)
         self.assertEqual(bin_groups.shape, ((2, 4)))
         bin_groups[:,0] = bin_groups[0,0]
         bin_groups[:,-1] = bin_groups[0,-1]
@@ -192,6 +191,20 @@ class TestMultiTargetModel(TestCase):
             model._bin_group_map,
             [0, 1, 2, 3, 0, 4, 5, 3],
         )
+        np.testing.assert_array_equal( # nested lists work just like arrays
+            caife.MultiTargetModel(target_bins, representation, bin_groups.tolist())._bin_group_map,
+            model._bin_group_map,
+        )
+
+        # target_view splits each group evenly across its bins, just like the latents do
+        w = rng.uniform(size=len(Y))
+        f_bins = caife.MultiTargetModel(target_bins, representation).target_view(Y, sample_weight=w)
+        f_groups = model.target_view(Y, sample_weight=w)
+        self.assertEqual(f_groups.shape, f_bins.shape)
+        self.assertAlmostEqual(f_groups.sum(), f_bins.sum())
+        for group in np.unique(bin_groups):
+            is_member = bin_groups == group
+            np.testing.assert_allclose(f_groups[is_member], f_bins[is_member].mean())
 
         # test create_latents
         latent = model.create_latents(X)

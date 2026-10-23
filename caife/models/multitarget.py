@@ -43,6 +43,7 @@ class MultiTargetModel(AbstractModel):
 
     def __post_init__(self):
         if self.bin_groups is not None:
+            self.bin_groups = np.asarray(self.bin_groups) # also accept nested lists
             if self.bin_groups.shape != self.n_bins_per_target:
                 raise ValueError("bin_groups.shape != n_bins_per_target")
             keys, bin_group_map, counts = np.unique(
@@ -96,10 +97,8 @@ class MultiTargetModel(AbstractModel):
             weights=sample_weight,
             minlength=self.n_bins_multitarget,
         )
-        if self.bin_groups is not None: # replicate groups
-            f_full = np.zeros(np.prod(self.n_bins_per_target))
-            f_full[self.bin_groups.reshape(-1)] = f
-            f = f_full
+        if self.bin_groups is not None: # split each group evenly across its bins, like the latents do
+            f = f[self._bin_group_map] / np.asarray(self._bin_group_counts)[self._bin_group_map]
         return f.reshape(self.n_bins_per_target) * (y.shape[0] / f.sum()) # scale to counts
 
     def represent_targets(self, y, separate=False):
@@ -265,14 +264,14 @@ class MultiTargetSystematicsModel(MultiTargetModel):
 
     def create_latents(self, X):
         return ( # create a tuple of latents such that params = (f, s)
-            LatentReshape(
-                LatentSpectrum(n_samples=len(X), n_bins_target=self.n_bins_multitarget),
-                self.n_bins_per_target, # = shape
-            ),
+            super().create_latents(X),
             LatentSystematics(bounds=self.systematic_bounds),
         )
 
     def __call__(self, params):
         f, s = params # f has shape tuple(self.n_bins_per_target)
-        g_pred = self.A(s) @ f.reshape(-1) + self.g_background_
+        f = f.reshape(-1)
+        if self.bin_groups is not None:
+            f = f[self._bin_group_keys] * self._bin_group_counts
+        g_pred = self.A(s) @ f + self.g_background_
         return g_pred
