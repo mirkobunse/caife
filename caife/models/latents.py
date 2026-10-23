@@ -46,25 +46,25 @@ class LatentSpectrum(AbstractLatentVector):
     """
     n_samples: int
     n_bins_target: int
-    sharing_indices: ArrayLike | None = None
+    bin_groups: ArrayLike | None = None
 
     def __call__(self, ell):
         exp_ell = jnp.concatenate((jnp.ones(1), jnp.exp(ell)))
-        if self.sharing_indices is not None:
-            exp_ell = exp_ell[self.sharing_indices + 1]
+        if self.bin_groups is not None:
+            exp_ell = exp_ell[self.bin_groups + 1]
         return self.n_samples * (exp_ell / exp_ell.sum())
 
     @staticmethod
-    def parameter_indices(n_bins_target):
+    def create_bin_groups(n_bins_target):
         return jnp.arange(n_bins_target) - 1 # first index is -1 = non-fittable
 
     def create_starting_point(self, rng=None):
         # draw logits that are uniformly distributed after applying a softmax
         logits = jnp.log(rng.exponential(size=self.n_bins_target))
         starting_point = logits[1:] - logits[0] # fix the first dimension to zero
-        if self.sharing_indices is not None:
+        if self.bin_groups is not None:
             starting_point = starting_point[jnp.unique(
-                self.sharing_indices[self.sharing_indices >= 0])]
+                self.bin_groups[self.bin_groups >= 0])]
         return starting_point
 
 
